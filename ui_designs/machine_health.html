@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Machine Health - Kinesis Plant Manager</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-surface": "#0b1c30",
+                    "inverse-on-surface": "#eaf1ff",
+                    "surface-container": "#e5eeff",
+                    "error-container": "#ffdad6",
+                    "surface-variant": "#d3e4fe",
+                    "primary": "#003c90",
+                    "secondary-fixed-dim": "#4ae176",
+                    "on-tertiary": "#ffffff",
+                    "on-surface-variant": "#434653",
+                    "surface-dim": "#cbdbf5",
+                    "surface-container-high": "#dce9ff",
+                    "on-error": "#ffffff",
+                    "on-secondary-container": "#007432",
+                    "tertiary-container": "#933e00",
+                    "surface-container-highest": "#d3e4fe",
+                    "secondary-fixed": "#6bff8f",
+                    "tertiary-fixed": "#ffdbca",
+                    "inverse-surface": "#213145",
+                    "surface-container-lowest": "#ffffff",
+                    "tertiary-fixed-dim": "#ffb690",
+                    "on-tertiary-container": "#ffc0a1",
+                    "on-background": "#0b1c30",
+                    "on-primary-fixed-variant": "#00419c",
+                    "outline-variant": "#c3c6d5",
+                    "tertiary": "#6e2d00",
+                    "on-primary-fixed": "#001945",
+                    "on-secondary-fixed": "#002109",
+                    "on-secondary-fixed-variant": "#005321",
+                    "surface": "#f8f9ff",
+                    "primary-fixed-dim": "#b0c6ff",
+                    "on-tertiary-fixed-variant": "#783200",
+                    "inverse-primary": "#b0c6ff",
+                    "primary-container": "#0f52ba",
+                    "primary-fixed": "#d9e2ff",
+                    "secondary": "#006e2f",
+                    "outline": "#737784",
+                    "on-tertiary-fixed": "#341100",
+                    "background": "#f8f9ff",
+                    "surface-bright": "#f8f9ff",
+                    "surface-tint": "#1d59c1",
+                    "surface-container-low": "#eff4ff",
+                    "on-secondary": "#ffffff",
+                    "on-error-container": "#93000a",
+                    "on-primary-container": "#bcceff",
+                    "error": "#ba1a1a",
+                    "secondary-container": "#6bff8f",
+                    "on-primary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "lg": "40px",
+                    "container-max": "1440px",
+                    "sm": "12px",
+                    "gutter": "24px",
+                    "xs": "4px",
+                    "md": "24px",
+                    "base": "8px"
+            },
+            "fontFamily": {
+                    "display-hero": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "stats-value": ["Inter"],
+                    "label-bold": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-md": ["Inter"]
+            },
+            "fontSize": {
+                    "display-hero": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "stats-value": ["36px", {"lineHeight": "44px", "fontWeight": "700"}],
+                    "label-bold": ["14px", {"lineHeight": "20px", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+      body {
+        background-color: #f8fafc;
+        color: #0b1c30;
+        font-family: 'Inter', sans-serif;
+      }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .card-shadow {
+        box-shadow: 0px 4px 12px rgba(0,0,0,0.05);
+      }
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 10px;
+      }
+    </style>
+</head>
+<body class="bg-background min-h-screen">
+<!-- Top Navigation Bar -->
+<header class="bg-surface sticky top-0 z-50 border-b border-outline-variant shadow-sm w-full">
+<div class="flex justify-between items-center px-lg py-sm w-full max-w-container-max mx-auto">
+<div class="flex items-center gap-md">
+<span class="font-headline-md text-headline-md font-bold text-primary">Kinesis</span>
+<nav class="hidden md:flex gap-md ml-lg">
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Dashboard</a>
+<a class="font-body-md text-body-md text-primary font-bold border-b-2 border-primary" href="#">Analytics</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Inventory</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<button class="material-symbols-outlined text-on-surface-variant p-base hover:bg-surface-container rounded-full transition-colors">notifications</button>
+<button class="material-symbols-outlined text-on-surface-variant p-base hover:bg-surface-container rounded-full transition-colors">settings</button>
+<div class="w-10 h-10 rounded-full bg-surface-container-high border border-outline-variant overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a middle-aged industrial plant supervisor wearing a high-visibility vest and a focused expression. The lighting is bright and clean, mimicking a modern office environment within an industrial facility. The style is crisp and realistic, with a soft-focus industrial background in shades of steel blue and light gray." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDD9fO0smedxsc2jooLxGPr5QfYsA1A3nP04UXxeVJGcO_YyuUYP0iYfdNaKwyqM143RXCBdWr6JDoN5UulFKxy_XKXaitMolQiFD6djsgnchvJk_8f3Sh9czeWpjgvIfxHa309x8lp6Wt9OFc0ufEFCyDDKqFN75BPTvoRa0oKL7rx4qaVqrRqiAPkxeAZBNItkz6AF8ch2Yr8DDYC36Gr-0qe4yhXgdqarShNDSAXSzPyK1FONDWV96hc4sQqIOPUvmceRzwKpE8"/>
+</div>
+</div>
+</div>
+</header>
+<div class="flex max-w-container-max mx-auto min-h-[calc(100vh-64px)]">
+<!-- Side Navigation Bar -->
+<aside class="hidden lg:flex flex-col w-64 bg-surface-container-low py-md px-sm border-r border-outline-variant">
+<div class="mb-lg px-sm">
+<p class="font-label-bold text-label-bold text-outline uppercase tracking-wider">Navigation</p>
+</div>
+<nav class="flex flex-col gap-xs flex-1">
+<a class="flex items-center gap-sm px-sm py-base rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary">dashboard</span>
+<span class="font-label-bold text-label-bold">Dashboard</span>
+</a>
+<a class="flex items-center gap-sm px-sm py-base rounded-lg text-primary font-bold border-r-4 border-primary bg-primary-container/10 transition-all" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-bold text-label-bold">Analytics</span>
+</a>
+<a class="flex items-center gap-sm px-sm py-base rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary">inventory_2</span>
+<span class="font-label-bold text-label-bold">Inventory</span>
+</a>
+<a class="flex items-center gap-sm px-sm py-base rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary">calendar_today</span>
+<span class="font-label-bold text-label-bold">Schedules</span>
+</a>
+<a class="flex items-center gap-sm px-sm py-base rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary">groups</span>
+<span class="font-label-bold text-label-bold">Team</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-outline-variant pt-md px-sm">
+<a class="flex items-center gap-sm py-base text-on-surface-variant hover:text-primary" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-label-bold text-label-bold">Help</span>
+</a>
+<a class="flex items-center gap-sm py-base text-on-surface-variant hover:text-primary" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-label-bold text-label-bold">Sign Out</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 p-md md:p-lg overflow-y-auto custom-scrollbar">
+<!-- Breadcrumbs / Back -->
+<div class="mb-md">
+<button class="flex items-center gap-xs text-primary font-label-bold text-label-bold hover:underline" onclick="window.history.back()">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                    Back to Dashboard
+                </button>
+</div>
+<!-- Page Title -->
+<div class="mb-lg">
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Machine Health - Will a machine break down?</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-xs">Real-time predictive maintenance analysis for the Assembly Wing.</p>
+</div>
+<!-- Main Alert Section: Furnace 3 -->
+<section class="mb-lg">
+<div class="bg-error-container/30 border-2 border-error rounded-xl p-lg flex flex-col md:flex-row items-center gap-lg card-shadow">
+<div class="flex-shrink-0 bg-error-container p-md rounded-full text-error">
+<span class="material-symbols-outlined text-[48px]" style="font-variation-settings: 'FILL' 1;">warning</span>
+</div>
+<div class="flex-1 text-center md:text-left">
+<h2 class="font-headline-md text-headline-md text-on-error-container mb-xs">Critical Alert: Furnace 3</h2>
+<p class="font-body-lg text-body-lg text-on-error-container opacity-90 max-w-2xl">
+                            Furnace 3 has been shaking more and more for 7 days, like a washing machine with a loose part — get it checked this week.
+                        </p>
+</div>
+<div class="w-full md:w-auto">
+<button class="w-full bg-primary hover:bg-primary-container text-on-primary px-lg py-md rounded-lg font-label-bold text-label-bold transition-all shadow-md active:scale-95 flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined">build</span>
+                            Create work order for Furnace 3
+                        </button>
+</div>
+</div>
+</section>
+<!-- Detailed Visualizations Grid -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-gutter mb-lg">
+<!-- Large Vibration Chart Card -->
+<div class="xl:col-span-2 bg-surface-container-lowest border border-outline-variant rounded-xl p-md md:p-lg card-shadow">
+<div class="flex justify-between items-center mb-lg">
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Vibration History (Last 30 Days)</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Furnace 3 - Main Bearing Hub Z-Axis</p>
+</div>
+<div class="flex gap-sm">
+<span class="flex items-center gap-xs font-label-bold text-label-bold text-on-surface-variant">
+<span class="w-3 h-3 rounded-full bg-error"></span> Spike Zone
+                            </span>
+<span class="flex items-center gap-xs font-label-bold text-label-bold text-on-surface-variant">
+<span class="w-3 h-3 rounded-full bg-secondary-container"></span> Normal Zone
+                            </span>
+</div>
+</div>
+<div class="relative h-64 md:h-80 w-full bg-surface-container-low/50 rounded-lg overflow-hidden border border-outline-variant">
+<!-- Chart Mockup with CSS -->
+<div class="absolute inset-x-0 top-0 h-1/2 bg-error/5 border-b border-dashed border-error/20 flex items-end px-md">
+<span class="font-label-bold text-[10px] text-error mb-1 uppercase tracking-widest">Danger Threshold</span>
+</div>
+<div class="absolute inset-x-0 bottom-0 h-1/2 bg-secondary-container/5 border-t border-dashed border-secondary/20 flex items-start px-md">
+<span class="font-label-bold text-[10px] text-secondary mt-1 uppercase tracking-widest">Normal Zone</span>
+</div>
+<!-- Visual representation of the line chart -->
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none">
+<defs>
+<lineargradient id="gradient-chart" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="rgba(186, 26, 26, 0.2)"></stop>
+<stop offset="100%" stop-color="rgba(15, 82, 186, 0)"></stop>
+</lineargradient>
+</defs>
+<!-- Path for the line -->
+<path class="w-full" d="M0,180 L50,185 L100,175 L150,190 L200,180 L250,182 L300,185 L350,170 L400,175 L450,180 L500,185 L550,170 L600,165 L650,150 L700,120 L750,80 L800,40 L850,20" fill="none" stroke="#ba1a1a" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path>
+<!-- Fill Area -->
+<path d="M0,180 L50,185 L100,175 L150,190 L200,180 L250,182 L300,185 L350,170 L400,175 L450,180 L500,185 L550,170 L600,165 L650,150 L700,120 L750,80 L800,40 L850,20 L850,320 L0,320 Z" fill="url(#gradient-chart)"></path>
+</svg>
+<!-- Today Indicator -->
+<div class="absolute right-4 top-4 flex flex-col items-center">
+<div class="bg-primary text-white px-base py-xs rounded font-label-bold text-[10px]">TODAY</div>
+<div class="w-0.5 h-64 bg-primary/30 dashed"></div>
+</div>
+</div>
+<div class="mt-md flex justify-between text-on-surface-variant font-label-bold text-[12px] px-sm">
+<span>30 Days Ago</span>
+<span>15 Days Ago</span>
+<span>7 Days Ago</span>
+<span>24 Hours Ago</span>
+<span class="text-primary font-bold">Today</span>
+</div>
+</div>
+<!-- Snapshot Stats -->
+<div class="flex flex-col gap-gutter">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md card-shadow flex-1">
+<h4 class="font-label-bold text-label-bold text-outline mb-sm">CURRENT VIBRATION</h4>
+<div class="flex items-baseline gap-xs">
+<span class="font-stats-value text-stats-value text-error">8.42</span>
+<span class="font-label-bold text-label-bold text-on-surface-variant">mm/s RMS</span>
+</div>
+<p class="font-body-md text-body-md text-error mt-xs flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+                            +312% since last week
+                        </p>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md card-shadow flex-1">
+<h4 class="font-label-bold text-label-bold text-outline mb-sm">ESTIMATED FAILURE</h4>
+<div class="flex items-baseline gap-xs">
+<span class="font-stats-value text-stats-value text-tertiary">4.2</span>
+<span class="font-label-bold text-label-bold text-on-surface-variant">Days</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant mt-xs">Projected breakdown window</p>
+</div>
+<div class="bg-primary rounded-xl p-md card-shadow flex-1 flex flex-col justify-between overflow-hidden relative group">
+<div class="relative z-10">
+<h4 class="font-label-bold text-label-bold text-on-primary-container mb-sm">ACTION REQUIRED</h4>
+<p class="font-body-md text-body-md text-on-primary font-bold">Update maintenance log after inspection.</p>
+</div>
+<button class="relative z-10 mt-md bg-on-primary text-primary px-md py-base rounded-lg font-label-bold text-label-bold hover:bg-primary-fixed-dim transition-colors">
+                            Log Findings
+                         </button>
+<div class="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[100px]">assignment_turned_in</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Secondary Section - Other Machines -->
+<section>
+<div class="flex justify-between items-center mb-md">
+<h2 class="font-headline-md text-headline-md text-on-surface">Secondary Monitor (Healthy Units)</h2>
+<button class="text-primary font-label-bold text-label-bold flex items-center gap-xs hover:underline">
+                        View Fleet Map
+                        <span class="material-symbols-outlined text-[18px]">map</span>
+</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter">
+<!-- Furnace 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md card-shadow flex flex-col gap-sm">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-label-bold text-label-bold text-on-surface">Furnace 1</h3>
+<p class="text-[12px] text-on-surface-variant">Casting Unit</p>
+</div>
+<span class="bg-secondary-container text-on-secondary-container px-base py-xs rounded-full text-[10px] font-bold uppercase tracking-wider">All Clear</span>
+</div>
+<div class="h-12 flex items-end gap-1">
+<!-- Small Sparkline Mockup -->
+<div class="w-full bg-secondary-container/10 rounded h-1 overflow-hidden">
+<div class="bg-secondary h-full w-[85%] rounded"></div>
+</div>
+</div>
+<div class="flex justify-between items-center text-[12px]">
+<span class="text-on-surface-variant">Vibration</span>
+<span class="text-secondary font-bold">0.8 mm/s</span>
+</div>
+</div>
+<!-- Furnace 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md card-shadow flex flex-col gap-sm">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-label-bold text-label-bold text-on-surface">Furnace 2</h3>
+<p class="text-[12px] text-on-surface-variant">Casting Unit</p>
+</div>
+<span class="bg-secondary-container text-on-secondary-container px-base py-xs rounded-full text-[10px] font-bold uppercase tracking-wider">Healthy</span>
+</div>
+<div class="h-12 flex items-end gap-1">
+<div class="w-full bg-secondary-container/10 rounded h-1 overflow-hidden">
+<div class="bg-secondary h-full w-[78%] rounded"></div>
+</div>
+</div>
+<div class="flex justify-between items-center text-[12px]">
+<span class="text-on-surface-variant">Vibration</span>
+<span class="text-secondary font-bold">1.2 mm/s</span>
+</div>
+</div>
+<!-- Lathe 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md card-shadow flex flex-col gap-sm">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-label-bold text-label-bold text-on-surface">Lathe 1</h3>
+<p class="text-[12px] text-on-surface-variant">Precision Machining</p>
+</div>
+<span class="bg-secondary-container text-on-secondary-container px-base py-xs rounded-full text-[10px] font-bold uppercase tracking-wider">Stable</span>
+</div>
+<div class="h-12 flex items-end gap-1">
+<div class="w-full bg-secondary-container/10 rounded h-1 overflow-hidden">
+<div class="bg-secondary h-full w-[92%] rounded"></div>
+</div>
+</div>
+<div class="flex justify-between items-center text-[12px]">
+<span class="text-on-surface-variant">Vibration</span>
+<span class="text-secondary font-bold">0.4 mm/s</span>
+</div>
+</div>
+<!-- Press 4 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md card-shadow flex flex-col gap-sm">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="font-label-bold text-label-bold text-on-surface">Press 4</h3>
+<p class="text-[12px] text-on-surface-variant">Hydraulic Stamp</p>
+</div>
+<span class="bg-secondary-container text-on-secondary-container px-base py-xs rounded-full text-[10px] font-bold uppercase tracking-wider">Nominal</span>
+</div>
+<div class="h-12 flex items-end gap-1">
+<div class="w-full bg-secondary-container/10 rounded h-1 overflow-hidden">
+<div class="bg-secondary h-full w-[80%] rounded"></div>
+</div>
+</div>
+<div class="flex justify-between items-center text-[12px]">
+<span class="text-on-surface-variant">Vibration</span>
+<span class="text-secondary font-bold">2.1 mm/s</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+</div>
+<!-- Mobile Navigation (Bottom Nav) -->
+<div class="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-outline-variant flex justify-around py-sm z-50">
+<button class="flex flex-col items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-[10px] font-label-bold">Home</span>
+</button>
+<button class="flex flex-col items-center gap-xs text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="text-[10px] font-label-bold">Health</span>
+</button>
+<button class="flex flex-col items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-label-bold">Settings</span>
+</button>
+</div>
+<script>
+        // Simple hover interaction for cards
+        const cards = document.querySelectorAll('.card-shadow');
+        cards.forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-2px)';
+                card.style.transition = 'transform 0.2s ease-out';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0)';
+            });
+        });
+
+        // Dynamic update simulation (Visual only)
+        setInterval(() => {
+            const stats = document.querySelectorAll('.text-secondary');
+            stats.forEach(stat => {
+                const current = parseFloat(stat.innerText);
+                const variance = (Math.random() - 0.5) * 0.1;
+                stat.innerText = (current + variance).toFixed(1) + ' mm/s';
+            });
+        }, 3000);
+    </script>
+</body></html>
