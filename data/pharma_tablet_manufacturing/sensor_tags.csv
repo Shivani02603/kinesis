@@ -1,0 +1,6 @@
+tag_id,description,unit
+GRN1_VIB,Granulator GRN-1 condition-monitoring vibration,mm/s
+TP2_VIB,Tablet Press TP-2 condition-monitoring vibration,mm/s
+CP3_VIB,Coating Pan CP-3 condition-monitoring vibration,mm/s
+BPL4_VIB,Blister Line BPL-4 condition-monitoring vibration,mm/s
+BATCH_REJECT_RATE,Percent of tablets rejected per batch (weight/hardness out of spec),%

@@ -1,0 +1,6 @@
+tag_id,description,unit
+SMT1_VIB,SMT Placement SMT-1 condition-monitoring vibration,mm/s
+RO4_VIB,Reflow Oven RO-4 condition-monitoring vibration,mm/s
+AOI2_VIB,AOI Station AOI-2 condition-monitoring vibration,mm/s
+WS3_VIB,Wave Solder WS-3 condition-monitoring vibration,mm/s
+SOLDER_DEFECT_RATE,Percent of boards rejected for solder joint defects,%

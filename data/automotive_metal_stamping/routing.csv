@@ -1,0 +1,5 @@
+sequence,machine,units_per_hour
+1,Stamping Press SP-7,60
+2,Weld Robot WR-2,120
+3,Paint Booth PB-3,90
+4,Assembly Line AL-1,150

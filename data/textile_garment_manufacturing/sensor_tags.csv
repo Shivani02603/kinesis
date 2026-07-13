@@ -1,0 +1,6 @@
+tag_id,description,unit
+WL2_VIB,Weaving Loom WL-2 condition-monitoring vibration,mm/s
+DV5_VIB,Dyeing Vat DV-5 condition-monitoring vibration,mm/s
+CT1_VIB,Cutting Table CT-1 condition-monitoring vibration,mm/s
+SL3_VIB,Stitching Line SL-3 condition-monitoring vibration,mm/s
+FABRIC_DEFECT_RATE,Percent of fabric rolls rejected for weave/dye defects,%

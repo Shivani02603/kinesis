@@ -1,0 +1,5 @@
+sequence,machine,units_per_hour
+1,SMT Placement SMT-1,60
+2,Reflow Oven RO-4,120
+3,AOI Station AOI-2,90
+4,Wave Solder WS-3,150

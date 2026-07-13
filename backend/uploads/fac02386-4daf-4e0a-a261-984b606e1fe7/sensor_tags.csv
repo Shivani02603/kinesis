@@ -1,0 +1,4 @@
+tag_id,description,unit
+FL4_VIB,Filler rotary turret vibration,mm/s
+FL4_FILL_PRESSURE,Filler nozzle line pressure,bar
+FILL_LEVEL_REJECT_RATE,Percent of bottles rejected for out-of-spec fill level,%

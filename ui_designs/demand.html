@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Demand Analytics - Kinesis Plant Manager</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-container": "#007432",
+                    "tertiary": "#6e2d00",
+                    "on-tertiary-container": "#ffc0a1",
+                    "on-secondary": "#ffffff",
+                    "on-background": "#0b1c30",
+                    "on-primary-fixed-variant": "#00419c",
+                    "on-surface": "#0b1c30",
+                    "surface-container": "#e5eeff",
+                    "primary": "#003c90",
+                    "surface-container-high": "#dce9ff",
+                    "surface-tint": "#1d59c1",
+                    "on-secondary-fixed-variant": "#005321",
+                    "surface-container-lowest": "#ffffff",
+                    "inverse-primary": "#b0c6ff",
+                    "outline-variant": "#c3c6d5",
+                    "outline": "#737784",
+                    "surface-container-highest": "#d3e4fe",
+                    "surface-container-low": "#eff4ff",
+                    "tertiary-fixed": "#ffdbca",
+                    "primary-fixed-dim": "#b0c6ff",
+                    "on-primary-fixed": "#001945",
+                    "surface-variant": "#d3e4fe",
+                    "tertiary-fixed-dim": "#ffb690",
+                    "secondary-container": "#6bff8f",
+                    "surface-bright": "#f8f9ff",
+                    "on-error-container": "#93000a",
+                    "secondary-fixed": "#6bff8f",
+                    "secondary": "#006e2f",
+                    "on-secondary-fixed": "#002109",
+                    "surface-dim": "#cbdbf5",
+                    "error-container": "#ffdad6",
+                    "on-primary-container": "#bcceff",
+                    "secondary-fixed-dim": "#4ae176",
+                    "primary-fixed": "#d9e2ff",
+                    "inverse-surface": "#213145",
+                    "on-tertiary": "#ffffff",
+                    "primary-container": "#0f52ba",
+                    "tertiary-container": "#933e00",
+                    "on-primary": "#ffffff",
+                    "on-error": "#ffffff",
+                    "background": "#f8f9ff",
+                    "surface": "#f8f9ff",
+                    "on-surface-variant": "#434653",
+                    "on-tertiary-fixed-variant": "#783200",
+                    "on-tertiary-fixed": "#341100",
+                    "inverse-on-surface": "#eaf1ff",
+                    "error": "#ba1a1a"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "gutter": "24px",
+                    "container-max": "1440px",
+                    "sm": "12px",
+                    "md": "24px",
+                    "lg": "40px",
+                    "base": "8px"
+            },
+            "fontFamily": {
+                    "label-bold": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "display-hero": ["Inter"],
+                    "stats-value": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "body-md": ["Inter"]
+            },
+            "fontSize": {
+                    "label-bold": ["14px", {"lineHeight": "20px", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "display-hero": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "stats-value": ["36px", {"lineHeight": "44px", "fontWeight": "700"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9ff; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .chart-bar:hover { filter: brightness(1.1); transition: filter 0.2s; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body class="text-on-surface">
+<!-- Sidebar (Shared Component Anchor) -->
+<aside class="fixed left-0 top-0 h-full w-64 bg-surface-container-low dark:bg-surface-container-lowest shadow-sm flex flex-col py-md z-50 hidden md:flex">
+<div class="px-md mb-lg">
+<h1 class="font-headline-md text-headline-md text-primary">Kinesis</h1>
+<p class="text-on-surface-variant font-label-bold text-label-bold">Supervisor Portal</p>
+</div>
+<nav class="flex-1">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant dark:text-on-surface-variant font-label-bold text-label-bold hover:bg-surface-container-high transition-all active:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+</li>
+<li>
+<!-- Active State: Analytics -->
+<a class="flex items-center gap-md px-md py-sm text-primary dark:text-primary-fixed font-bold border-r-4 border-primary bg-primary-container/10 font-label-bold text-label-bold" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span>Analytics</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant dark:text-on-surface-variant font-label-bold text-label-bold hover:bg-surface-container-high transition-all active:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span>Inventory</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant dark:text-on-surface-variant font-label-bold text-label-bold hover:bg-surface-container-high transition-all active:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span>Schedules</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant dark:text-on-surface-variant font-label-bold text-label-bold hover:bg-surface-container-high transition-all active:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span>Team</span>
+</a>
+</li>
+</ul>
+</nav>
+<div class="px-md mt-auto pt-md border-t border-outline-variant">
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant font-label-bold text-label-bold hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span>Help</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant font-label-bold text-label-bold hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>Sign Out</span>
+</a>
+</div>
+</aside>
+<!-- Top Navigation Bar -->
+<header class="fixed top-0 right-0 left-0 md:left-64 bg-surface dark:bg-inverse-surface border-b border-outline-variant dark:border-outline shadow-sm z-40">
+<div class="flex justify-between items-center px-lg py-sm w-full max-w-container-max mx-auto">
+<div class="flex items-center gap-md">
+<button class="md:hidden p-xs">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Kinesis</span>
+</div>
+<div class="hidden md:flex items-center gap-lg">
+<button class="bg-primary text-on-primary px-md py-xs rounded-lg font-label-bold text-label-bold hover:opacity-90 transition-all active:scale-95">
+                    Update with my latest data
+                </button>
+<div class="flex items-center gap-sm">
+<button class="p-xs hover:bg-surface-container rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-xs hover:bg-surface-container rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="w-10 h-10 rounded-full bg-surface-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a facility manager in a clean, high-tech industrial office setting. The lighting is soft and natural, emphasizing a calm and focused demeanor. The background shows blurred industrial architectural details in neutral tones of silver and white." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCuaDFUOEoJqTX4mz9dX8JwJBs5A5CF4tY_TiCy2SjaU-Z6dJinwGEgYsWr70GS5wxWo38hnc1tZSGekY-vBxRAUkjmHzyZXQGNJYMeYKwCrzPdFQyMzp-Se6n95RSR8Pq2ZCXAldgs6felqpOvTtIFj50IPICHm8KkaMSNoKjwXv9Dn9ivGB-v7IaggNJd82O_lao04id1f4akikmulJE2q7GmgCVoT46frNRcbXeWxt3wcx_nbcYMeALghs_dtdcsuSjNkIa8oqI"/>
+</div>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-[72px] pb-lg md:ml-64 px-md md:px-lg min-h-screen transition-all">
+<div class="max-w-container-max mx-auto py-md space-y-md">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-md mb-base">
+<div class="space-y-xs">
+<a class="flex items-center gap-xs text-primary font-label-bold text-label-bold hover:underline mb-xs" href="#">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                        Back to Dashboard
+                    </a>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Demand - How much will we ship next week?</h2>
+</div>
+<button class="flex items-center gap-sm bg-primary px-lg py-sm text-on-primary rounded-xl font-label-bold text-label-bold shadow-md hover:bg-primary-container active:scale-95 transition-all">
+<span class="material-symbols-outlined">sync</span>
+                    Update with latest sales data
+                </button>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Key Insight Hero Area -->
+<section class="md:col-span-12 lg:col-span-4 bg-primary-container text-on-primary p-lg rounded-xl shadow-sm flex flex-col justify-center relative overflow-hidden">
+<!-- Subtle background decoration -->
+<div class="absolute -right-12 -top-12 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
+<div class="relative z-10 space-y-md">
+<span class="bg-white/20 px-sm py-xs rounded-full font-label-bold text-label-bold">Weekly Forecast</span>
+<p class="font-display-hero text-display-hero leading-tight">
+                            Expect about <span class="text-secondary-container">3,140</span> units next week.
+                        </p>
+<p class="font-body-lg text-body-lg opacity-90">
+                            Predicting high volume during weekdays with a significant dip on weekends.
+                        </p>
+<div class="pt-md flex items-center gap-md">
+<div class="flex flex-col">
+<span class="text-xs uppercase tracking-wider opacity-70">Accuracy</span>
+<span class="font-stats-value text-[24px]">94.2%</span>
+</div>
+<div class="w-px h-10 bg-white/20"></div>
+<div class="flex flex-col">
+<span class="text-xs uppercase tracking-wider opacity-70">Trend</span>
+<span class="flex items-center text-secondary-container font-bold">
+<span class="material-symbols-outlined">trending_up</span>
+                                    +12%
+                                </span>
+</div>
+</div>
+</div>
+</section>
+<!-- Main Visualization: Detailed Bar Chart -->
+<section class="md:col-span-12 lg:col-span-8 bg-white p-lg rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col">
+<div class="flex items-center justify-between mb-lg">
+<h3 class="font-headline-md text-headline-md">14-Day Demand Prediction</h3>
+<div class="flex items-center gap-md">
+<div class="flex items-center gap-xs">
+<div class="w-3 h-3 bg-primary rounded-full"></div>
+<span class="text-xs font-label-bold text-on-surface-variant">Predicted Units</span>
+</div>
+<select class="bg-surface-container-low border-none rounded-lg text-label-bold py-xs px-sm ring-1 ring-outline-variant">
+<option>Daily View</option>
+<option>Shift View</option>
+</select>
+</div>
+</div>
+<!-- Simplified Chart Implementation -->
+<div class="flex-1 flex flex-col justify-end min-h-[300px]">
+<div class="flex items-end justify-between gap-xs h-[240px] relative">
+<!-- Y-Axis Labels -->
+<div class="absolute -left-8 h-full flex flex-col justify-between text-[10px] text-on-surface-variant font-label-bold opacity-50">
+<span>800</span>
+<span>600</span>
+<span>400</span>
+<span>200</span>
+<span>0</span>
+</div>
+<!-- Grid Lines -->
+<div class="absolute inset-0 flex flex-col justify-between pointer-events-none">
+<div class="w-full h-px bg-outline-variant/20"></div>
+<div class="w-full h-px bg-outline-variant/20"></div>
+<div class="w-full h-px bg-outline-variant/20"></div>
+<div class="w-full h-px bg-outline-variant/20"></div>
+<div class="w-full h-px bg-outline-variant/40"></div>
+</div>
+<!-- Bars (14 Days) -->
+<!-- Day 1-14 simulation -->
+<div class="chart-bar w-full bg-primary rounded-t-sm" style="height: 75%;" title="Day 1: 620 units"></div>
+<div class="chart-bar w-full bg-primary rounded-t-sm" style="height: 82%;" title="Day 2: 680 units"></div>
+<div class="chart-bar w-full bg-primary rounded-t-sm" style="height: 88%;" title="Day 3: 710 units"></div>
+<div class="chart-bar w-full bg-primary rounded-t-sm" style="height: 80%;" title="Day 4: 640 units"></div>
+<div class="chart-bar w-full bg-primary rounded-t-sm" style="height: 78%;" title="Day 5: 610 units"></div>
+<div class="chart-bar w-full bg-outline-variant/40 rounded-t-sm" style="height: 25%;" title="Day 6: 210 units (Weekend)"></div>
+<div class="chart-bar w-full bg-outline-variant/40 rounded-t-sm" style="height: 20%;" title="Day 7: 180 units (Weekend)"></div>
+<div class="chart-bar w-full bg-primary-fixed-dim rounded-t-sm" style="height: 72%;" title="Day 8: 590 units"></div>
+<div class="chart-bar w-full bg-primary-fixed-dim rounded-t-sm" style="height: 85%;" title="Day 9: 690 units"></div>
+<div class="chart-bar w-full bg-primary-fixed-dim rounded-t-sm" style="height: 90%;" title="Day 10: 730 units"></div>
+<div class="chart-bar w-full bg-primary-fixed-dim rounded-t-sm" style="height: 84%;" title="Day 11: 670 units"></div>
+<div class="chart-bar w-full bg-primary-fixed-dim rounded-t-sm" style="height: 76%;" title="Day 12: 600 units"></div>
+<div class="chart-bar w-full bg-outline-variant/40 rounded-t-sm" style="height: 22%;" title="Day 13: 190 units"></div>
+<div class="chart-bar w-full bg-outline-variant/40 rounded-t-sm" style="height: 18%;" title="Day 14: 150 units"></div>
+</div>
+<!-- X-Axis Labels -->
+<div class="flex justify-between mt-sm text-[10px] text-on-surface-variant font-label-bold uppercase tracking-widest">
+<span>Mon</span>
+<span>Tue</span>
+<span>Wed</span>
+<span>Thu</span>
+<span>Fri</span>
+<span class="text-error">Sat</span>
+<span class="text-error">Sun</span>
+<span>Mon</span>
+<span>Tue</span>
+<span>Wed</span>
+<span>Thu</span>
+<span>Fri</span>
+<span class="text-error">Sat</span>
+<span class="text-error">Sun</span>
+</div>
+</div>
+</section>
+<!-- Data Table: Top Products Demanded -->
+<section class="md:col-span-12 bg-white rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-outline-variant/30 overflow-hidden">
+<div class="p-lg border-b border-outline-variant/30 flex items-center justify-between bg-surface-container-low/30">
+<h3 class="font-headline-md text-headline-md">Top Products Demanded</h3>
+<button class="text-primary font-label-bold text-label-bold flex items-center gap-xs">
+                            View All Products <span class="material-symbols-outlined text-[20px]">open_in_new</span>
+</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead>
+<tr class="bg-surface-bright text-on-surface-variant font-label-bold text-label-bold border-b border-outline-variant/30">
+<th class="px-lg py-md">Product Name</th>
+<th class="px-lg py-md text-right">Predicted Quantity</th>
+<th class="px-lg py-md">Trend</th>
+<th class="px-lg py-md">Priority Status</th>
+<th class="px-lg py-md">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/20">
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-lg py-md font-label-bold text-label-bold flex items-center gap-md">
+<div class="w-10 h-10 rounded bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">precision_manufacturing</span>
+</div>
+<div>
+<p class="text-on-surface">Kinesis Pro-X Hub</p>
+<p class="text-[12px] text-on-surface-variant">SKU: PN-10293</p>
+</div>
+</td>
+<td class="px-lg py-md text-right font-stats-value text-[18px]">1,240</td>
+<td class="px-lg py-md">
+<span class="flex items-center gap-xs text-on-secondary-container">
+<span class="material-symbols-outlined text-[18px]">trending_up</span>
+                                            +15%
+                                        </span>
+</td>
+<td class="px-lg py-md">
+<span class="px-sm py-xs bg-error-container text-on-error-container text-[12px] rounded-full font-bold uppercase tracking-wider">Critical</span>
+</td>
+<td class="px-lg py-md">
+<button class="p-xs hover:bg-surface-container rounded-lg transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-lg py-md font-label-bold text-label-bold flex items-center gap-md">
+<div class="w-10 h-10 rounded bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">memory</span>
+</div>
+<div>
+<p class="text-on-surface">Circuit Array v4</p>
+<p class="text-[12px] text-on-surface-variant">SKU: PN-88421</p>
+</div>
+</td>
+<td class="px-lg py-md text-right font-stats-value text-[18px]">940</td>
+<td class="px-lg py-md">
+<span class="flex items-center gap-xs text-on-secondary-container">
+<span class="material-symbols-outlined text-[18px]">trending_up</span>
+                                            +8.2%
+                                        </span>
+</td>
+<td class="px-lg py-md">
+<span class="px-sm py-xs bg-secondary-container text-on-secondary-container text-[12px] rounded-full font-bold uppercase tracking-wider">Stable</span>
+</td>
+<td class="px-lg py-md">
+<button class="p-xs hover:bg-surface-container rounded-lg transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-lg py-md font-label-bold text-label-bold flex items-center gap-md">
+<div class="w-10 h-10 rounded bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">bolt</span>
+</div>
+<div>
+<p class="text-on-surface">High-Voltage Coupling</p>
+<p class="text-[12px] text-on-surface-variant">SKU: PN-44210</p>
+</div>
+</td>
+<td class="px-lg py-md text-right font-stats-value text-[18px]">610</td>
+<td class="px-lg py-md">
+<span class="flex items-center gap-xs text-tertiary">
+<span class="material-symbols-outlined text-[18px]">trending_flat</span>
+                                            0%
+                                        </span>
+</td>
+<td class="px-lg py-md">
+<span class="px-sm py-xs bg-tertiary-fixed text-on-tertiary-fixed-variant text-[12px] rounded-full font-bold uppercase tracking-wider">Warning</span>
+</td>
+<td class="px-lg py-md">
+<button class="p-xs hover:bg-surface-container rounded-lg transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-lg py-md font-label-bold text-label-bold flex items-center gap-md">
+<div class="w-10 h-10 rounded bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">settings_input_component</span>
+</div>
+<div>
+<p class="text-on-surface">Thermal Resistors (Pack)</p>
+<p class="text-[12px] text-on-surface-variant">SKU: PN-55209</p>
+</div>
+</td>
+<td class="px-lg py-md text-right font-stats-value text-[18px]">350</td>
+<td class="px-lg py-md">
+<span class="flex items-center gap-xs text-error">
+<span class="material-symbols-outlined text-[18px]">trending_down</span>
+                                            -4%
+                                        </span>
+</td>
+<td class="px-lg py-md">
+<span class="px-sm py-xs bg-surface-container-highest text-on-surface-variant text-[12px] rounded-full font-bold uppercase tracking-wider">Low Priority</span>
+</td>
+<td class="px-lg py-md">
+<button class="p-xs hover:bg-surface-container rounded-lg transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-outline-variant flex justify-around py-sm z-50">
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-[10px] font-label-bold">Home</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-primary" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="text-[10px] font-label-bold">Demand</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="text-[10px] font-label-bold">Inventory</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-label-bold">Profile</span>
+</a>
+</nav>
+<script>
+        // Micro-interaction for update button
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if(this.textContent.includes('Update')) {
+                    const icon = this.querySelector('.material-symbols-outlined');
+                    if(icon) {
+                        icon.classList.add('animate-spin');
+                        setTimeout(() => icon.classList.remove('animate-spin'), 1500);
+                    }
+                }
+            });
+        });
+
+        // Simple Chart Hover Effect
+        document.querySelectorAll('.chart-bar').forEach(bar => {
+            bar.addEventListener('mouseenter', function() {
+                this.style.transform = 'scaleY(1.05)';
+                this.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            });
+            bar.addEventListener('mouseleave', function() {
+                this.style.transform = 'scaleY(1)';
+            });
+        });
+    </script>
+</body></html>

@@ -1,0 +1,5 @@
+sequence,machine,units_per_hour
+1,Granulator GRN-1,60
+2,Tablet Press TP-2,120
+3,Coating Pan CP-3,90
+4,Blister Line BPL-4,150

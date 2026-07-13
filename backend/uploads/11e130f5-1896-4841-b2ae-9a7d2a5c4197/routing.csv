@@ -1,0 +1,5 @@
+sequence,machine,units_per_hour
+1,Mixer MX-1,60
+2,Filler FL-4,120
+3,Capper CP-2,90
+4,Labeler LB-3,150

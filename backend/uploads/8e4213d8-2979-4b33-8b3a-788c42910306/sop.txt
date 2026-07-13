@@ -1,0 +1,13 @@
+Standard Operating Procedure - Heat Treatment Line
+
+1. Raw material (steel blanks) is received at the receiving dock and staged for processing.
+
+2. Blanks are loaded into FCE-03, the primary batch furnace, for the heat treatment cycle of
+   the steel components. Furnace chamber temperature must be maintained per the active work
+   order specification for the full soak time.
+
+3. After heat treatment, parts move via the cooling belt to reach ambient temperature before
+   further handling.
+
+4. Parts are inspected at the inspection station for dimensional conformity. Rejected parts
+   are routed to scrap; conforming parts are logged and staged for the next step.

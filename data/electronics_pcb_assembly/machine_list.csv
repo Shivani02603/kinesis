@@ -1,0 +1,5 @@
+asset_id,name,description
+AST-01,SMT Placement SMT-1,Surface-mount placement machine for component placement
+AST-02,Reflow Oven RO-4,Convection reflow oven for solder paste reflow
+AST-03,AOI Station AOI-2,Automated optical inspection station
+AST-04,Wave Solder WS-3,Wave soldering machine for through-hole components

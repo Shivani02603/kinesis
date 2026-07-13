@@ -1,0 +1,6 @@
+tag_id,description,unit
+SP7_VIB,Stamping Press SP-7 condition-monitoring vibration,mm/s
+WR2_VIB,Weld Robot WR-2 condition-monitoring vibration,mm/s
+PB3_VIB,Paint Booth PB-3 condition-monitoring vibration,mm/s
+AL1_VIB,Assembly Line AL-1 condition-monitoring vibration,mm/s
+WELD_DEFECT_RATE,Percent of welds rejected for penetration/porosity defects,%

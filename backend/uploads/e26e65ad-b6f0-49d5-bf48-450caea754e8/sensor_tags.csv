@@ -1,0 +1,6 @@
+tag_id,description,unit
+FCE-03_TEMP,Furnace 3 chamber temperature,C
+FCE-03_VIB,Furnace 3 door vibration sensor,mm/s
+CNV-12_SPEED,Cooling conveyor belt speed,m/min
+INS-1_REJECT_RATE,Inspection station reject rate,percent
+PKG2_HUM_XJ99,Legacy humidity sensor near the packaging area; original owner/purpose unverified,percent

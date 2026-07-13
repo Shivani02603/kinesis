@@ -1,0 +1,174 @@
+Beginning AutoGluon training... Time limit = 600s
+AutoGluon will save models to 'C:\Users\Shivani\Desktop\kinesis_final\backend\models\11e130f5-1896-4841-b2ae-9a7d2a5c4197\0cc84b88-5c12-4549-b269-69eedd9032bc'
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.11.9
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.26200
+CPU Count:          8
+Pytorch Version:    2.9.1+cpu
+CUDA Version:       CUDA is not available
+GPU Memory:         
+Total GPU Memory:   Free: 0.00 GB, Allocated: 0.00 GB, Total: 0.00 GB
+GPU Count:          0
+Memory Avail:       1.28 GB / 7.75 GB (16.5%)
+Disk Space Avail:   78.04 GB / 296.49 GB (26.3%)
+===================================================
+Setting presets to: medium_quality
+
+Fitting with arguments:
+{'enable_ensemble': True,
+ 'eval_metric': WQL,
+ 'hyperparameters': 'light',
+ 'known_covariates_names': [],
+ 'num_val_windows': 1,
+ 'prediction_length': 18,
+ 'quantile_levels': [0.1, 0.5, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'target',
+ 'time_limit': 600,
+ 'verbosity': 2}
+
+Inferred time series frequency: 'D'
+Provided train_data has 720 rows, 8 time series. Median time series length is 90 (min=90, max=90). 
+
+Provided data contains following columns:
+	target: 'target'
+
+AutoGluon will gauge predictive performance using evaluation metric: 'WQL'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+===================================================
+
+Starting training. Start time is 2026-07-13 00:57:08
+Models that will be trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos2', 'TemporalFusionTransformer']
+Training timeseries model SeasonalNaive. Training for up to 75.0s of the 600.0s of remaining time.
+	-0.0448       = Validation score (-WQL)
+	0.02    s     = Training runtime
+	0.04    s     = Validation (prediction) runtime
+Training timeseries model RecursiveTabular. Training for up to 85.7s of the 599.9s of remaining time.
+	-0.0539       = Validation score (-WQL)
+	2.12    s     = Training runtime
+	0.39    s     = Validation (prediction) runtime
+Training timeseries model DirectTabular. Training for up to 99.6s of the 597.3s of remaining time.
+	-0.0567       = Validation score (-WQL)
+	2.33    s     = Training runtime
+	0.17    s     = Validation (prediction) runtime
+Training timeseries model ETS. Training for up to 118.9s of the 594.7s of remaining time.
+	-0.0408       = Validation score (-WQL)
+	0.02    s     = Training runtime
+	0.39    s     = Validation (prediction) runtime
+Training timeseries model Theta. Training for up to 148.6s of the 594.2s of remaining time.
+	-0.0432       = Validation score (-WQL)
+	0.03    s     = Training runtime
+	0.07    s     = Validation (prediction) runtime
+Training timeseries model Chronos2. Training for up to 198.0s of the 594.1s of remaining time.
+	-0.0396       = Validation score (-WQL)
+	3.37    s     = Training runtime
+	0.23    s     = Validation (prediction) runtime
+Training timeseries model TemporalFusionTransformer. Training for up to 295.2s of the 590.5s of remaining time.
+	-0.0377       = Validation score (-WQL)
+	267.09  s     = Training runtime
+	0.07    s     = Validation (prediction) runtime
+Fitting 1 ensemble(s), in 1 layers.
+Training ensemble model WeightedEnsemble. Training for up to 322.9s.
+	Ensemble weights: {'Chronos2': 0.03, 'ETS': 0.27, 'RecursiveTabular': 0.07, 'SeasonalNaive': 0.02, 'TemporalFusionTransformer': 0.57, 'Theta': 0.04}
+	-0.0339       = Validation score (-WQL)
+	1.42    s     = Training runtime
+	1.19    s     = Validation (prediction) runtime
+Training complete. Models trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos2', 'TemporalFusionTransformer', 'WeightedEnsemble']
+Total runtime: 279.09 s
+Best model: WeightedEnsemble
+Best model score: -0.0339
+Additional data provided, testing on additional data. Resulting leaderboard will be sorted according to test score (`score_test`).
+Model not specified in predict, will default to the model with the best validation score: WeightedEnsemble
+Beginning AutoGluon training... Time limit = 600s
+AutoGluon will save models to 'C:\Users\Shivani\Desktop\kinesis_final\backend\models\11e130f5-1896-4841-b2ae-9a7d2a5c4197\8faf34fd-0c43-4b66-a56f-235c0eda9e61'
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.11.9
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.26200
+CPU Count:          8
+Pytorch Version:    2.9.1+cpu
+CUDA Version:       CUDA is not available
+GPU Memory:         
+Total GPU Memory:   Free: 0.00 GB, Allocated: 0.00 GB, Total: 0.00 GB
+GPU Count:          0
+Memory Avail:       0.65 GB / 7.75 GB (8.4%)
+Disk Space Avail:   77.98 GB / 296.49 GB (26.3%)
+===================================================
+Setting presets to: medium_quality
+
+Fitting with arguments:
+{'enable_ensemble': True,
+ 'eval_metric': WQL,
+ 'hyperparameters': 'light',
+ 'known_covariates_names': [],
+ 'num_val_windows': 1,
+ 'prediction_length': 48,
+ 'quantile_levels': [0.1, 0.5, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'target',
+ 'time_limit': 600,
+ 'verbosity': 2}
+
+Inferred time series frequency: 'h'
+Provided train_data has 1344 rows, 4 time series. Median time series length is 336 (min=336, max=336). 
+
+Provided data contains following columns:
+	target: 'target'
+
+AutoGluon will gauge predictive performance using evaluation metric: 'WQL'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+===================================================
+
+Starting training. Start time is 2026-07-13 01:13:17
+Models that will be trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos2', 'TemporalFusionTransformer']
+Training timeseries model SeasonalNaive. Training for up to 75.0s of the 599.8s of remaining time.
+	-0.0598       = Validation score (-WQL)
+	0.06    s     = Training runtime
+	27.54   s     = Validation (prediction) runtime
+Training timeseries model RecursiveTabular. Training for up to 81.7s of the 572.0s of remaining time.
+	-0.0991       = Validation score (-WQL)
+	5.50    s     = Training runtime
+	0.33    s     = Validation (prediction) runtime
+Training timeseries model DirectTabular. Training for up to 94.4s of the 566.2s of remaining time.
+	-0.1083       = Validation score (-WQL)
+	6.71    s     = Training runtime
+	0.21    s     = Validation (prediction) runtime
+Training timeseries model ETS. Training for up to 111.8s of the 559.1s of remaining time.
+	-0.0328       = Validation score (-WQL)
+	0.02    s     = Training runtime
+	9.96    s     = Validation (prediction) runtime
+Training timeseries model Theta. Training for up to 137.3s of the 549.1s of remaining time.
+	-0.0484       = Validation score (-WQL)
+	0.02    s     = Training runtime
+	0.08    s     = Validation (prediction) runtime
+Training timeseries model Chronos2. Training for up to 183.0s of the 548.9s of remaining time.
+	-0.0399       = Validation score (-WQL)
+	3.97    s     = Training runtime
+	0.60    s     = Validation (prediction) runtime
+Training timeseries model TemporalFusionTransformer. Training for up to 272.2s of the 544.3s of remaining time.
+	-0.0642       = Validation score (-WQL)
+	246.35  s     = Training runtime
+	0.09    s     = Validation (prediction) runtime
+Fitting 1 ensemble(s), in 1 layers.
+Training ensemble model WeightedEnsemble. Training for up to 297.4s.
+	Ensemble weights: {'Chronos2': 0.01, 'ETS': 0.99}
+	-0.0328       = Validation score (-WQL)
+	0.91    s     = Training runtime
+	10.58   s     = Validation (prediction) runtime
+Training complete. Models trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos2', 'TemporalFusionTransformer', 'WeightedEnsemble']
+Total runtime: 303.92 s
+Best model: WeightedEnsemble
+Best model score: -0.0328
+Additional data provided, testing on additional data. Resulting leaderboard will be sorted according to test score (`score_test`).
+Model not specified in predict, will default to the model with the best validation score: WeightedEnsemble
