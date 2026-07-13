@@ -1,0 +1,8 @@
+# environment files
+.env*
+!.env.example
+
+# claude-related files and folders
+.claude*
+CLAUDE.md
+claude.md
