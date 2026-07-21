@@ -101,14 +101,7 @@ def _find_signals_with_data(store: GraphStore, project_id: str, upload_dir: Path
     structural + data-presence half of feasibility. The asset it measures is
     attached as context when that link exists; a business-event column
     (order lead time, shipped units) legitimately has none."""
-    signals = store.run(
-        "MATCH (s:Signal {project_id: $project_id}) "
-        "WHERE s.source_reference IS NOT NULL "
-        "OPTIONAL MATCH (s)-[:MEASURES]->(a:Asset {project_id: $project_id}) "
-        "RETURN s.id AS signal_id, s.name AS signal_name, s.notes AS signal_notes, "
-        "s.source AS source_file, s.source_reference AS source_column, a.name AS asset_name",
-        project_id=project_id,
-    )
+    signals = store.signals_with_data_reference(project_id)
     found = []
     for row in signals:
         count = _count_column_values(upload_dir / row["source_file"], row["source_column"])

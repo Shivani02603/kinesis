@@ -46,3 +46,42 @@ AutoGluon will gauge predictive performance using evaluation metric: 'WQL'
 Starting training. Start time is 2026-07-21 09:54:51
 Models that will be trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos2', 'TemporalFusionTransformer']
 Training timeseries model SeasonalNaive. Training for up to 75.0s of the 600.0s of remaining time.
+	-0.0475       = Validation score (-WQL)
+	0.02    s     = Training runtime
+	17.45   s     = Validation (prediction) runtime
+Training timeseries model RecursiveTabular. Training for up to 83.2s of the 582.5s of remaining time.
+	-0.0454       = Validation score (-WQL)
+	1.12    s     = Training runtime
+	0.07    s     = Validation (prediction) runtime
+Training timeseries model DirectTabular. Training for up to 96.9s of the 581.3s of remaining time.
+	-0.0495       = Validation score (-WQL)
+	1.26    s     = Training runtime
+	0.11    s     = Validation (prediction) runtime
+Training timeseries model ETS. Training for up to 116.0s of the 579.8s of remaining time.
+	-0.0427       = Validation score (-WQL)
+	0.02    s     = Training runtime
+	5.80    s     = Validation (prediction) runtime
+Training timeseries model Theta. Training for up to 143.5s of the 574.0s of remaining time.
+	-0.0892       = Validation score (-WQL)
+	0.01    s     = Training runtime
+	0.06    s     = Validation (prediction) runtime
+Training timeseries model Chronos2. Training for up to 191.3s of the 573.9s of remaining time.
+	-0.0586       = Validation score (-WQL)
+	2.78    s     = Training runtime
+	0.33    s     = Validation (prediction) runtime
+Training timeseries model TemporalFusionTransformer. Training for up to 285.4s of the 570.8s of remaining time.
+	-0.0308       = Validation score (-WQL)
+	257.86  s     = Training runtime
+	0.12    s     = Validation (prediction) runtime
+Fitting 1 ensemble(s), in 1 layers.
+Training ensemble model WeightedEnsemble. Training for up to 312.5s.
+	Ensemble weights: {'RecursiveTabular': 0.04, 'TemporalFusionTransformer': 0.96}
+	-0.0307       = Validation score (-WQL)
+	0.72    s     = Training runtime
+	0.19    s     = Validation (prediction) runtime
+Training complete. Models trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos2', 'TemporalFusionTransformer', 'WeightedEnsemble']
+Total runtime: 288.58 s
+Best model: WeightedEnsemble
+Best model score: -0.0307
+Additional data provided, testing on additional data. Resulting leaderboard will be sorted according to test score (`score_test`).
+Model not specified in predict, will default to the model with the best validation score: WeightedEnsemble
