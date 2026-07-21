@@ -8,7 +8,9 @@ on a validation failure so the model can self-correct.
 
 import json
 import os
+import time
 
+import openai
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
 
@@ -16,6 +18,58 @@ from .schemas import ExtractionResult
 
 _DEFAULT_MODEL = "gpt-4o"
 _MAX_ATTEMPTS = 5
+_RATE_LIMIT_MAX_ATTEMPTS = 6
+_RATE_LIMIT_BASE_DELAY = 5.0  # seconds; doubles each attempt, capped below
+_RATE_LIMIT_MAX_DELAY = 60.0
+_CONNECTION_MAX_ATTEMPTS = 4
+_CONNECTION_BASE_DELAY = 2.0  # seconds; doubles each attempt, capped below
+_CONNECTION_MAX_DELAY = 15.0
+
+
+def _create_with_rate_limit_retry(client: OpenAI, **kwargs):
+    """Two distinct transient-failure classes get their own wait-and-retry
+    budgets, separate from _call_tool_with_retry's schema-correction
+    attempts — neither is a schema problem:
+    - RateLimitError (429): a real, transient capacity signal. Honors a
+      Retry-After header when the provider sends one; falls back to
+      exponential backoff.
+    - APIConnectionError: DNS/network blips — observed in practice right
+      after a freshly created Azure endpoint, before its routing has fully
+      propagated. Short backoff, since these normally clear in seconds.
+    Either budget exhausted still raises, so a genuinely stuck quota or a
+    real outage fails loudly rather than hanging or being silently
+    swallowed."""
+    for attempt in range(_RATE_LIMIT_MAX_ATTEMPTS):
+        try:
+            return _create_with_connection_retry(client, **kwargs)
+        except openai.RateLimitError as exc:
+            if attempt == _RATE_LIMIT_MAX_ATTEMPTS - 1:
+                raise
+            retry_after = exc.response.headers.get("retry-after") if exc.response is not None else None
+            if retry_after is not None:
+                delay = float(retry_after)
+            else:
+                delay = min(_RATE_LIMIT_MAX_DELAY, _RATE_LIMIT_BASE_DELAY * (2 ** attempt))
+            print(
+                f"[llm_extraction] rate limited (attempt {attempt + 1}/{_RATE_LIMIT_MAX_ATTEMPTS}), "
+                f"waiting {delay:.0f}s before retrying: {exc}"
+            )
+            time.sleep(delay)
+
+
+def _create_with_connection_retry(client: OpenAI, **kwargs):
+    for attempt in range(_CONNECTION_MAX_ATTEMPTS):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except openai.APIConnectionError as exc:
+            if attempt == _CONNECTION_MAX_ATTEMPTS - 1:
+                raise
+            delay = min(_CONNECTION_MAX_DELAY, _CONNECTION_BASE_DELAY * (2 ** attempt))
+            print(
+                f"[llm_extraction] connection error (attempt {attempt + 1}/{_CONNECTION_MAX_ATTEMPTS}), "
+                f"waiting {delay:.0f}s before retrying: {exc}"
+            )
+            time.sleep(delay)
 
 _SYSTEM_PROMPT = """You are extracting factory-process entities and relationships from one \
 uploaded source document at a time, for a manufacturing understanding pipeline.
@@ -124,6 +178,26 @@ def _model_name() -> str:
     return os.environ.get("OPENAI_MODEL", _DEFAULT_MODEL)
 
 
+def _unwrap_if_nested(arguments: dict, result_model: type[BaseModel]) -> dict:
+    """Some OpenAI-compatible providers wrap the real tool arguments one level
+    deeper, under a single key matching the result type's own name — observed:
+    {"extraction_result": {"entities": [...], "relationships": [...]}} instead
+    of the flat shape the schema asks for. This is a wire-format quirk, not a
+    content mistake, so the retry-with-error-message loop below can't talk the
+    model out of it (it repeats the same wrapping every attempt). Only unwrap
+    when the top level has none of the expected fields but has exactly one key
+    whose value is a dict that does — never touches an already-correct or
+    partially-correct response."""
+    expected = set(result_model.model_fields.keys())
+    if expected & arguments.keys():
+        return arguments
+    if len(arguments) == 1:
+        (only_value,) = arguments.values()
+        if isinstance(only_value, dict) and expected & only_value.keys():
+            return only_value
+    return arguments
+
+
 def _call_tool_with_retry(
     tool_name: str, tool_description: str, result_model: type[BaseModel], messages: list
 ) -> BaseModel:
@@ -144,7 +218,8 @@ def _call_tool_with_retry(
         # "required" instead of naming the tool: we always pass exactly one tool, so
         # the two are equivalent — but some OpenAI-compatible providers (Azure's
         # DeepSeek endpoint) abort on the named form while honoring "required".
-        response = client.chat.completions.create(
+        response = _create_with_rate_limit_retry(
+            client,
             model=_model_name(),
             tools=tools,
             tool_choice="required",
@@ -163,7 +238,10 @@ def _call_tool_with_retry(
         tool_call = tool_calls[0]
         try:
             arguments = json.loads(tool_call.function.arguments)
-            return result_model.model_validate(arguments)
+            unwrapped = _unwrap_if_nested(arguments, result_model)
+            if unwrapped is not arguments:
+                print(f"[llm_extraction] unwrapped a nested '{list(arguments.keys())[0]}' wrapper around the tool arguments")
+            return result_model.model_validate(unwrapped)
         except (json.JSONDecodeError, ValidationError) as exc:
             last_error = str(exc)
             messages.append(message)

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Company Admin · Kinesis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body data-persona="admin" data-active="overview" data-title="Company console"
+      data-subtitle="Acme Steel Plant · you manage data &amp; people, not structure">
+  <div class="k-shell">
+    <div id="k-sidebar-mount"></div>
+    <div class="k-main">
+      <div id="k-topbar-mount"></div>
+      <div class="k-content scrollbar-thin" style="overflow-y:auto">
+
+        <div class="k-card p-4 mb-5" style="background:var(--surface-2)">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined accent" style="font-size:22px">info</span>
+            <p class="text-xs muted" style="margin:0">
+              As Company Admin you keep the <b>data flowing</b> and the <b>right people</b> in the right roles.
+              Changing the factory’s structure (new machines, re-training the graph) goes to Kinesis as a
+              request — that keeps your plan scope and graph accuracy honest.
+            </p>
+          </div>
+        </div>
+
+        <div class="grid cols-4 gap-3 mb-5">
+          <div class="k-card k-stat tone-ok"><div class="lab">Connections live</div><div class="val">5 / 6</div><div class="sub">data sources reporting</div></div>
+          <div class="k-card k-stat"><div class="lab">People</div><div class="val">9</div><div class="sub">across the team</div></div>
+          <div class="k-card k-stat"><div class="lab">Confirmed graph</div><div class="val">v3</div><div class="sub">signed off 12 Jul</div></div>
+          <div class="k-card k-stat tone-watch"><div class="lab">Open requests</div><div class="val">1</div><div class="sub">awaiting Kinesis</div></div>
+        </div>
+
+        <!-- quick access: each opens its own page (matches the sidebar) -->
+        <div class="text-xs uppercase font-bold faint mb-2" style="letter-spacing:.06em">Manage</div>
+        <div class="grid cols-3 gap-4 mb-5">
+          <a class="k-card k-section" href="admin-connections.html" style="text-decoration:none;color:inherit">
+            <div class="flex items-center gap-3 mb-2">
+              <span class="icon-tile" style="background:var(--success-soft);color:var(--success)"><span class="material-symbols-outlined">cable</span></span>
+              <div><div class="font-bold text-sm">Data connections</div><div class="text-xs faint">5 live · 1 needs attention</div></div>
+            </div>
+            <p class="text-xs muted mb-2">Where every signal’s routine data comes from — connected or role-fed.</p>
+            <span class="text-xs accent font-semibold">Open <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">arrow_forward</span></span>
+          </a>
+          <a class="k-card k-section" href="admin-people.html" style="text-decoration:none;color:inherit">
+            <div class="flex items-center gap-3 mb-2">
+              <span class="icon-tile" style="background:var(--info-soft);color:var(--info)"><span class="material-symbols-outlined">group</span></span>
+              <div><div class="font-bold text-sm">People &amp; roles</div><div class="text-xs faint">9 people</div></div>
+            </div>
+            <p class="text-xs muted mb-2">Who sees the operational dashboard and who feeds data through their work.</p>
+            <span class="text-xs accent font-semibold">Open <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">arrow_forward</span></span>
+          </a>
+          <a class="k-card k-section" href="admin-map.html" style="text-decoration:none;color:inherit">
+            <div class="flex items-center gap-3 mb-2">
+              <span class="icon-tile" style="background:var(--warning-soft);color:var(--warning)"><span class="material-symbols-outlined">account_tree</span></span>
+              <div><div class="font-bold text-sm">Process map</div><div class="text-xs faint">6 stages · 12 machines · 23 signals</div></div>
+            </div>
+            <p class="text-xs muted mb-2">Your confirmed factory graph (read-only) — the full picture.</p>
+            <span class="text-xs accent font-semibold">Open <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">arrow_forward</span></span>
+          </a>
+        </div>
+
+        <!-- structure request (stays on the console — it's an admin action, not a section) -->
+        <div class="k-card k-section">
+          <div class="head"><div><h3>Need a structure change?</h3><div class="subtitle">New machine, new sensor, or a process step changed — you request, Kinesis reviews &amp; trains it.</div></div>
+            <button class="k-btn k-btn-primary"><span class="material-symbols-outlined" style="font-size:18px">add</span>New request</button></div>
+          <div class="k-card p-4" style="box-shadow:none;background:var(--surface-2)">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-semibold">Add machine “Quench Tank QT-2”</div>
+                <div class="text-xs faint">Submitted 2 days ago</div>
+              </div>
+              <span class="k-badge k-badge-watch">Pending Kinesis</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="k-proto"><span class="material-symbols-outlined" style="font-size:15px">draw</span>Prototype · sample data for layout</div>
+  <script src="assets/shell.js"></script>
+</body>
+</html>

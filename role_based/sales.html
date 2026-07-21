@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Deliveries · Kinesis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+  <style>
+    .k-input, .k-select { width:100%; border:1px solid var(--border); border-radius:var(--radius-sm); padding:.55rem .7rem; font:inherit; font-size:.875rem; margin-top:.25rem; }
+    .k-label { font-size:.7rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em; }
+  </style>
+</head>
+<body data-persona="plant_head" data-active="deliveries" data-title="Deliveries"
+      data-subtitle="Will orders reach on time?">
+  <div class="k-shell">
+    <div id="k-sidebar-mount"></div>
+    <div class="k-main">
+      <div id="k-topbar-mount"></div>
+      <div class="k-content scrollbar-thin" style="overflow-y:auto">
+
+        <div class="grid cols-4 gap-3 mb-5">
+          <div class="k-card k-stat tone-ok"><div class="lab">On track</div><div class="val">18</div><div class="sub">open orders</div></div>
+          <div class="k-card k-stat tone-watch"><div class="lab">At risk</div><div class="val">2</div><div class="sub">may miss promised date</div></div>
+          <div class="k-card k-stat"><div class="lab">On-time % (30d)</div><div class="val">92%</div><div class="sub">from 61 completed orders</div></div>
+          <div class="k-card k-stat"><div class="lab">On-time % (all)</div><div class="val">88%</div><div class="sub">from 240 orders</div></div>
+        </div>
+
+        <!-- orders table -->
+        <div class="k-card k-section mb-5">
+          <div class="head"><div><h3>Will orders reach on time?</h3><div class="subtitle">Estimated delivery = order date + lead time predicted from your own order history.</div></div></div>
+          <table class="k-table">
+            <thead><tr><th>Order</th><th>Destination</th><th>Promised</th><th>Est. delivery</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">SO-2214</td><td>Pune</td><td>18 Jul</td><td class="font-semibold">17 Jul</td><td><span class="k-badge k-badge-ok">On track</span></td></tr>
+              <tr style="background:rgba(186,26,26,.06)"><td class="mono">SO-2217</td><td>Nagpur</td><td>16 Jul</td><td class="font-semibold">19 Jul</td><td><span class="k-badge k-badge-crit">~3d late</span></td></tr>
+              <tr><td class="mono">SO-2219</td><td>Surat</td><td>22 Jul</td><td class="font-semibold">21 Jul</td><td><span class="k-badge k-badge-ok">On track</span></td></tr>
+              <tr style="background:rgba(147,62,0,.06)"><td class="mono">SO-2221</td><td>Indore</td><td>17 Jul</td><td class="font-semibold">18 Jul</td><td><span class="k-badge k-badge-watch">~1d late</span></td></tr>
+              <tr><td class="mono">SO-2223</td><td>Mumbai</td><td>25 Jul</td><td class="font-semibold">23 Jul</td><td><span class="k-badge k-badge-ok">On track</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid cols-2 gap-4" style="align-items:start">
+          <!-- quote a new order -->
+          <div class="k-card k-section" id="quote">
+            <div class="head"><div><h3>Quote a new order</h3><div class="subtitle">Get an expected date for an order that isn’t placed yet — before you commit to the client.</div></div></div>
+            <div class="grid cols-2 gap-3 mb-3">
+              <div><div class="k-label">Order date</div><input class="k-input" type="date" /></div>
+              <div><div class="k-label">Quantity</div><input class="k-input" type="number" placeholder="5000" /></div>
+              <div><div class="k-label">Product</div><select class="k-select"><option>Hardened rod</option><option>Tempered plate</option><option>Annealed coil</option></select></div>
+              <div><div class="k-label">Destination</div><input class="k-input" placeholder="e.g. Pune" /></div>
+            </div>
+            <button class="k-btn k-btn-primary" onclick="document.getElementById('quoteOut').style.display='grid'"><span class="material-symbols-outlined" style="font-size:18px">bolt</span>Get expected date</button>
+            <div class="grid cols-2 gap-3 mt-4" id="quoteOut" style="display:none">
+              <div class="k-card k-stat" style="box-shadow:none;background:var(--surface-2)"><div class="lab">Typical case</div><div class="val">24 Jul</div><div class="sub">~10 days · median of similar orders</div></div>
+              <div class="k-card k-stat tone-ok" style="box-shadow:none;background:var(--surface-2)"><div class="lab">Safe to promise</div><div class="val">28 Jul</div><div class="sub">~90% of similar orders finished by this</div></div>
+            </div>
+          </div>
+
+          <!-- new order entry (= demand data) -->
+          <div class="k-card k-section" id="new">
+            <div class="head"><div><h3>Enter a new order</h3><div class="subtitle">Placing it here <b>is</b> the demand signal the forecast learns from — no separate data entry.</div></div></div>
+            <div class="grid cols-2 gap-3 mb-3">
+              <div><div class="k-label">Client</div><input class="k-input" placeholder="Client name" /></div>
+              <div><div class="k-label">Product</div><select class="k-select"><option>Hardened rod</option><option>Tempered plate</option><option>Annealed coil</option></select></div>
+              <div><div class="k-label">Quantity</div><input class="k-input" type="number" placeholder="5000" /></div>
+              <div><div class="k-label">Promised date</div><input class="k-input" type="date" /></div>
+            </div>
+            <button class="k-btn k-btn-primary"><span class="material-symbols-outlined" style="font-size:18px">add_shopping_cart</span>Place order</button>
+            <p class="text-xs faint mt-2">Feeds Deliveries, Demand forecast, and the Planner’s schedule automatically.</p>
+          </div>
+        </div>
+
+        <!-- what affects delivery -->
+        <div class="k-card k-section mt-5">
+          <div class="head"><div><h3>What affects our delivery time?</h3><div class="subtitle">Relative influence learned by the model from your completed orders.</div></div></div>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3"><span class="text-sm muted" style="width:12rem">Quantity</span><div class="k-bar"><span style="width:42%"></span></div><span class="text-xs faint" style="width:3rem;text-align:right">42%</span></div>
+            <div class="flex items-center gap-3"><span class="text-sm muted" style="width:12rem">Machine load that week</span><div class="k-bar"><span style="width:31%"></span></div><span class="text-xs faint" style="width:3rem;text-align:right">31%</span></div>
+            <div class="flex items-center gap-3"><span class="text-sm muted" style="width:12rem">Destination region</span><div class="k-bar"><span style="width:17%"></span></div><span class="text-xs faint" style="width:3rem;text-align:right">17%</span></div>
+            <div class="flex items-center gap-3"><span class="text-sm muted" style="width:12rem">Product type</span><div class="k-bar"><span style="width:10%"></span></div><span class="text-xs faint" style="width:3rem;text-align:right">10%</span></div>
+          </div>
+        </div>
+
+        <p class="text-xs faint mono mt-6">checked just now · run c14e0b9</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="k-proto"><span class="material-symbols-outlined" style="font-size:15px">draw</span>Prototype · sample data for layout</div>
+  <script src="assets/shell.js"></script>
+</body>
+</html>

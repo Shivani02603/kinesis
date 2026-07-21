@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Data connections · Kinesis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body data-persona="admin" data-active="connections" data-title="Data connections"
+      data-subtitle="Where each signal’s day-to-day data comes from">
+  <div class="k-shell">
+    <div id="k-sidebar-mount"></div>
+    <div class="k-main">
+      <div id="k-topbar-mount"></div>
+      <div class="k-content scrollbar-thin" style="overflow-y:auto">
+
+        <!-- plain-language explanation of the one idea -->
+        <div class="k-card p-4 mb-5" style="background:var(--surface-2)">
+          <div class="flex items-start gap-3">
+            <span class="material-symbols-outlined accent" style="font-size:22px">bolt</span>
+            <div>
+              <p class="text-sm" style="margin:0 0 .4rem"><b>One idea:</b> the factory was trained once. After that, fresh data
+                just keeps flowing into each known signal — no re-uploading, no re-training.</p>
+              <p class="text-xs muted" style="margin:0">Every source arrives one of two ways:
+                <b class="ok">Auto</b> — a system pushes it in on its own · &nbsp;
+                <b class="accent">By hand</b> — a person enters it as part of their normal work. That’s the whole page.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid cols-4 gap-3 mb-5">
+          <div class="k-card k-stat tone-ok"><div class="lab">Auto (streaming)</div><div class="val">2</div><div class="sub">systems connected</div></div>
+          <div class="k-card k-stat"><div class="lab">By hand (role-fed)</div><div class="val">2</div><div class="sub">daily work = data</div></div>
+          <div class="k-card k-stat tone-watch"><div class="lab">Needs attention</div><div class="val">1</div><div class="sub">a sensor went quiet</div></div>
+          <div class="k-card k-stat"><div class="lab">Signals covered</div><div class="val">21 / 23</div><div class="sub">have a live source</div></div>
+        </div>
+
+        <!-- ONE clear table of every source -->
+        <div class="k-card k-section mb-5">
+          <div class="head">
+            <div><h3>All data sources</h3><div class="subtitle">Everything feeding the platform, in one place — and exactly how each one arrives.</div></div>
+          </div>
+          <table class="k-table">
+            <thead><tr><th>Source</th><th>Feeds</th><th>How it arrives</th><th>Last update</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="font-semibold">Sensors / IoT gateway</td>
+                <td class="muted">Machine Health</td>
+                <td><span class="k-badge k-badge-ok">Auto · streaming</span></td>
+                <td class="mono faint">40s ago</td>
+                <td><span class="flex items-center gap-2"><span class="k-dot k-dot-ok"></span>Live</span></td>
+              </tr>
+              <tr>
+                <td class="font-semibold">ERP</td>
+                <td class="muted">Deliveries · Demand · Materials</td>
+                <td><span class="k-badge k-badge-ok">Auto · streaming</span></td>
+                <td class="mono faint">8 min ago</td>
+                <td><span class="flex items-center gap-2"><span class="k-dot k-dot-ok"></span>Live</span></td>
+              </tr>
+              <tr style="background:rgba(147,62,0,.05)">
+                <td class="font-semibold">Coating-line sensor <span class="mono faint">CTG-07</span></td>
+                <td class="muted">Machine Health</td>
+                <td><span class="k-badge k-badge-ok">Auto · streaming</span></td>
+                <td class="mono watch">6h ago</td>
+                <td><span class="flex items-center gap-2 watch"><span class="k-dot k-dot-watch"></span>Went quiet</span></td>
+              </tr>
+              <tr>
+                <td class="font-semibold">Maintenance / failure history</td>
+                <td class="muted">Machine failure risk</td>
+                <td><span class="k-badge k-badge-info">By hand · Maintenance closes an alert</span></td>
+                <td class="mono faint">today</td>
+                <td><span class="flex items-center gap-2"><span class="k-dot k-dot-ok"></span>Flowing</span></td>
+              </tr>
+              <tr>
+                <td class="font-semibold">QC batch results</td>
+                <td class="muted">Quality</td>
+                <td><span class="k-badge k-badge-info">By hand · QC marks pass/fail</span></td>
+                <td class="mono faint">1h ago</td>
+                <td><span class="flex items-center gap-2"><span class="k-dot k-dot-ok"></span>Flowing</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="text-xs faint mt-3">“By hand” isn’t extra work — it’s a role’s normal daily action doubling as the data entry.
+            Where a client has no system (no CMMS/LIMS), this is how that data still arrives.</p>
+        </div>
+
+        <!-- one attention item -->
+        <div class="k-card k-section mb-5" style="border:1px solid var(--warning)">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex items-center gap-3">
+              <span class="icon-tile" style="background:var(--warning-soft);color:var(--warning)"><span class="material-symbols-outlined">warning</span></span>
+              <div>
+                <div class="font-extrabold">Coating-line sensor CTG-07 went quiet</div>
+                <div class="text-xs muted">No reading for 6 hours — likely the gateway is offline. Machine Health for the coating line is paused until it’s back.</div>
+              </div>
+            </div>
+            <button class="k-btn k-btn-primary">Troubleshoot</button>
+          </div>
+        </div>
+
+        <!-- small add action, clearly secondary -->
+        <div class="k-card p-4">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div class="font-bold text-sm">Add another source</div>
+              <div class="text-xs muted">Only signals already in the confirmed graph can receive data — anything unknown is held for review, never silently added.</div>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button class="k-btn k-btn-outline"><span class="material-symbols-outlined" style="font-size:18px">lan</span>Connect a system</button>
+              <button class="k-btn k-btn-outline"><span class="material-symbols-outlined" style="font-size:18px">upload_file</span>One-off CSV</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="k-proto"><span class="material-symbols-outlined" style="font-size:15px">draw</span>Prototype · sample data for layout</div>
+  <script src="assets/shell.js"></script>
+</body>
+</html>

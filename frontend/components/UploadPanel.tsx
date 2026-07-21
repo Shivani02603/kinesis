@@ -7,15 +7,18 @@ export function UploadPanel({
   projectId,
   files,
   onChanged,
+  onStarted,
+  disabled,
 }: {
   projectId: string;
   files: FileEntry[];
   onChanged: () => void;
+  onStarted: () => void;
+  disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [running, setRunning] = useState(false);
-  const [log, setLog] = useState<string[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   async function handleFilesSelected(fileList: FileList | null) {
@@ -33,16 +36,14 @@ export function UploadPanel({
 
   async function handleRun() {
     setRunning(true);
-    setLog(null);
     setMessage(null);
     try {
       const result = await api.runPipeline(projectId);
       if (result.message) {
         setMessage(result.message);
       } else {
-        setLog(result.resolution_log ?? []);
+        onStarted();
       }
-      onChanged();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Run failed");
     } finally {
@@ -89,27 +90,16 @@ export function UploadPanel({
       <button
         className="btn btn-primary w-full justify-center"
         onClick={handleRun}
-        disabled={running || files.length === 0 || unprocessedCount === 0}
+        disabled={disabled || running || files.length === 0 || unprocessedCount === 0}
       >
         {running
-          ? "Running…"
+          ? "Starting…"
           : unprocessedCount === 0
           ? "All sources processed"
           : `Run pipeline (${unprocessedCount} new)`}
       </button>
 
       {message && <p className="text-xs text-[var(--text-muted)]">{message}</p>}
-
-      {log && log.length > 0 && (
-        <div className="mt-2">
-          <h3 className="text-xs font-semibold text-[var(--text-muted)] mb-1">Resolution log</h3>
-          <div className="scrollbar-thin max-h-48 overflow-y-auto text-xs font-mono bg-[var(--bg)] rounded p-2 space-y-0.5">
-            {log.map((line, i) => (
-              <div key={i} className="text-[var(--text-muted)]">{line}</div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

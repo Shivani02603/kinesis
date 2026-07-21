@@ -10,6 +10,7 @@ on its own and reusable outside a web server.
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from .graph_store import GraphStore
 from .llm_extraction import extract_from_source
@@ -43,8 +44,8 @@ def _namespace_ids(entities: list[Entity], relationships: list[Relationship], so
     The LLM invents ids independently per call and has no visibility into ids
     from other sources — two unrelated entities in different files can easily
     slugify to the same string (both call it "fce-03-temp"). Without this,
-    Neo4j's MERGE-by-id would silently collapse them into one node, bypassing
-    entity resolution's similarity check entirely — the merge queue and
+    the graph store's upsert-by-id would silently collapse them into one node,
+    bypassing entity resolution's similarity check entirely — the merge queue and
     threshold would never even see it happen. Resolution is the only place
     ids are allowed to converge, via its explicit id_map.
     """
@@ -65,7 +66,17 @@ def run_pipeline(
     known_distinct_pairs: set[tuple[str, str]] | None = None,
     acknowledged_gap_ids: set[str] | None = None,
     acknowledged_orphan_ids: set[str] | None = None,
+    on_event: Callable[[int, str, str], None] | None = None,
 ) -> PipelineResult:
+    # Optional progress callback (step, tag, message) — every message passed to it is a
+    # real fact about this specific run (a real filename, a real extracted entity, a real
+    # similarity score), never a scripted placeholder. The caller (the API layer) uses this
+    # to show a live "discovery running" view; this function still knows nothing about how
+    # or whether that's surfaced.
+    def emit(step: int, tag: str, text: str) -> None:
+        if on_event:
+            on_event(step, tag, text)
+
     # Fetched once up front (not per-file) so every source in this run — including ones
     # processed earlier in this same loop — is visible as "already known" to the ones after
     # it. Without this, a signal in a data log can never be told it measures an asset that
@@ -76,12 +87,15 @@ def run_pipeline(
 
     for path in source_paths:
         parsed = parse_source(path)
+        emit(0, "parse", f"Parsed {parsed.source_name} — {len(parsed.text)} chars")
         known = [
             {"id": e.id, "entity_type": e.entity_type.value, "name": e.name, "notes": e.attributes.notes}
             for e in (existing_entities + all_entities)
         ]
         result = extract_from_source(parsed.source_name, parsed.text, known_entities=known)
         entities, relationships = _namespace_ids(result.entities, result.relationships, parsed.source_name)
+        for e in entities:
+            emit(1, "extract", f"{e.name} → {e.entity_type.value}")
         all_entities.extend(entities)
         all_relationships.extend(relationships)
 
@@ -91,18 +105,30 @@ def run_pipeline(
         known_merge_pairs=known_merge_pairs,
         known_distinct_pairs=known_distinct_pairs,
     )
+    for line in resolution.resolution_log:
+        emit(2, "resolve", line)
     relationships = remap_relationships(all_relationships, resolution.id_map)
 
     entities_by_id = {re_.canonical.id: re_.canonical for re_ in resolution.resolved_entities}
     conflicts = find_conflicting_sources(relationships, entities_by_id)
 
+    name_by_id = {e.id: e.name for e in existing_entities}
     for re_ in resolution.resolved_entities:
         store.upsert_entity(project_id, re_.canonical)
+        name_by_id[re_.canonical.id] = re_.canonical.name
+        emit(3, "graph", f"{re_.canonical.name} — written to graph")
     for r in relationships:
         store.upsert_relationship(project_id, r)
+        from_name = name_by_id.get(r.from_id, r.from_id)
+        to_name = name_by_id.get(r.to_id, r.to_id)
+        emit(3, "graph", f"{from_name} —{r.relationship_type.value}→ {to_name}")
 
     stage_gaps = find_stage_gaps(store, project_id, acknowledged_gap_ids)
     orphans = find_orphan_entities(store, project_id, acknowledged_orphan_ids)
+    for g in stage_gaps:
+        emit(4, "validate", f"{g.stage_name} — missing {g.missing} → flagged for review")
+    for o in orphans:
+        emit(4, "validate", f"{o.entity_name} ({o.entity_label}) — no relationships → flagged for review")
 
     return PipelineResult(
         resolved_entities=resolution.resolved_entities,

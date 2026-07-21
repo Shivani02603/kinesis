@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Process map · Kinesis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+  <style>
+    .canvas { position:relative; height:600px; border-radius:var(--radius);
+      background:radial-gradient(circle, var(--border) 1px, transparent 1px) 0 0/22px 22px, var(--surface); overflow:hidden; }
+    .gnode { position:absolute; width:132px; padding:.45rem .6rem; border-radius:8px; border:1.5px solid; font-size:.72rem; line-height:1.25; background:#fff; z-index:2;
+      opacity:0; transform:translateY(6px); animation:pop .4s forwards; }
+    @keyframes pop { to { opacity:1; transform:none; } }
+    .gnode .k { font-size:.58rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; opacity:.7; }
+    .gnode .n { font-weight:700; }
+    .t-stage  { border-color:#933e00; background:#ffdbca; }
+    .t-asset  { border-color:#003c90; background:#d9e2ff; }
+    .t-signal { border-color:#2e7d32; background:#e8f5e9; }
+    .edges { position:absolute; inset:0; z-index:1; pointer-events:none; }
+    .edges path { fill:none; stroke:var(--border-strong); stroke-width:1.4; opacity:.5; }
+    .col-h { position:absolute; top:10px; font-size:.62rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); z-index:3; }
+  </style>
+</head>
+<body data-persona="admin" data-active="graph" data-title="Process map"
+      data-subtitle="Acme Steel Plant · confirmed factory graph v3">
+  <div class="k-shell">
+    <div id="k-sidebar-mount"></div>
+    <div class="k-main">
+      <div id="k-topbar-mount"></div>
+      <div class="k-content scrollbar-thin" style="overflow-y:auto">
+
+        <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+          <div class="k-card p-4" style="background:var(--surface-2);flex:1">
+            <div class="flex items-center gap-3">
+              <span class="material-symbols-outlined accent" style="font-size:22px">account_tree</span>
+              <p class="text-xs muted" style="margin:0">
+                Your full confirmed factory — every <b style="color:#933e00">stage</b>, <b style="color:#003c90">machine</b>
+                and <b style="color:#2e7d32">signal</b> and how they connect. This is <b>read-only</b>: editing the
+                structure lives with Kinesis (a re-train), you view it here for reference.
+              </p>
+            </div>
+          </div>
+          <span class="k-badge k-badge-neutral" style="align-self:flex-start">Read-only · v3</span>
+        </div>
+
+        <div class="grid cols-4 gap-3 mb-4">
+          <div class="k-card k-stat" style="border-left:3px solid #933e00"><div class="lab">Stages</div><div class="val">6</div><div class="sub">receiving → dispatch</div></div>
+          <div class="k-card k-stat" style="border-left:3px solid #003c90"><div class="lab">Machines</div><div class="val">6</div><div class="sub">assets under contract</div></div>
+          <div class="k-card k-stat" style="border-left:3px solid #2e7d32"><div class="lab">Signals</div><div class="val">7</div><div class="sub">sensors + parameters</div></div>
+          <div class="k-card k-stat"><div class="lab">Relationships</div><div class="val">17</div><div class="sub">precedes · part-of · measures</div></div>
+        </div>
+
+        <div class="k-card k-section">
+          <div class="head"><div><h3>Factory graph</h3><div class="subtitle">Left→right is the real process order; machines sit on their stage; signals measure their machine.</div></div></div>
+          <div class="canvas" id="canvas">
+            <div class="col-h" style="left:2%">Process stages</div>
+            <div class="col-h" style="left:39%">Machines</div>
+            <div class="col-h" style="left:75%">Signals</div>
+            <svg class="edges" id="edges" viewBox="0 0 620 600" preserveAspectRatio="none"></svg>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="k-proto"><span class="material-symbols-outlined" style="font-size:15px">draw</span>Prototype · sample data for layout</div>
+  <script src="assets/shell.js"></script>
+  <script>
+  (function(){
+    const NODES = [
+      // stages
+      { id:"recv", t:"stage", k:"Stage", n:"Receiving",        x:14,  y:60 },
+      { id:"heat", t:"stage", k:"Stage", n:"Heat treatment",   x:14,  y:148 },
+      { id:"cool", t:"stage", k:"Stage", n:"Cooling",          x:14,  y:236 },
+      { id:"insp", t:"stage", k:"Stage", n:"Inspection",       x:14,  y:324 },
+      { id:"pack", t:"stage", k:"Stage", n:"Packaging",        x:14,  y:412 },
+      { id:"disp", t:"stage", k:"Stage", n:"Dispatch",         x:14,  y:500 },
+      // assets
+      { id:"furn", t:"asset", k:"Asset", n:"Furnace 3",        x:236, y:40 },
+      { id:"anneal",t:"asset",k:"Asset", n:"Annealing Furnace",x:236, y:124 },
+      { id:"quench",t:"asset",k:"Asset", n:"Quench Tank",      x:236, y:208 },
+      { id:"conv", t:"asset", k:"Asset", n:"Cooling Conveyor", x:236, y:292 },
+      { id:"istn", t:"asset", k:"Asset", n:"Inspection Stn",   x:236, y:376 },
+      { id:"pkg",  t:"asset", k:"Asset", n:"Packaging PKG-2",  x:236, y:460 },
+      // signals
+      { id:"temp", t:"signal",k:"Signal · process",   n:"FCE-03_TEMP",       x:458, y:24 },
+      { id:"vib",  t:"signal",k:"Signal · mechanical",n:"FCE-03_VIB",        x:458, y:100 },
+      { id:"anT",  t:"signal",k:"Signal · process",   n:"ANNEAL_TEMP",       x:458, y:176 },
+      { id:"qT",   t:"signal",k:"Signal · process",   n:"QUENCH_TEMP",       x:458, y:252 },
+      { id:"cnv",  t:"signal",k:"Signal · process",   n:"CNV-12_SPEED",      x:458, y:328 },
+      { id:"rej",  t:"signal",k:"Signal · process",   n:"INS-1_REJECT_RATE", x:458, y:404 },
+      { id:"pw",   t:"signal",k:"Signal · process",   n:"PKG_WEIGHT",        x:458, y:480 },
+    ];
+    const EDGES = [
+      ["recv","heat"],["heat","cool"],["cool","insp"],["insp","pack"],["pack","disp"],
+      ["furn","heat"],["anneal","heat"],["quench","cool"],["conv","cool"],["istn","insp"],["pkg","pack"],
+      ["temp","furn"],["vib","furn"],["anT","anneal"],["qT","quench"],["cnv","conv"],["rej","istn"],["pw","pkg"],
+    ];
+    const canvas=document.getElementById("canvas"), svg=document.getElementById("edges");
+    const NW=132, NH=44;
+    const els={};
+    function px(v,dim){ return dim==="x"? v/620*canvas.clientWidth : v/600*canvas.clientHeight; }
+    function render(){
+      canvas.querySelectorAll(".gnode").forEach(e=>e.remove()); svg.innerHTML="";
+      NODES.forEach((nd,i)=>{
+        const el=document.createElement("div");
+        el.className="gnode t-"+nd.t;
+        el.style.left=px(nd.x,"x")+"px"; el.style.top=px(nd.y,"y")+"px";
+        el.style.animationDelay=(i*28)+"ms";
+        el.innerHTML='<div class="k">'+nd.k+'</div><div class="n">'+nd.n+'</div>';
+        canvas.appendChild(el); els[nd.id]={nd};
+      });
+      EDGES.forEach(([a,b])=>{
+        const A=els[a].nd, B=els[b].nd;
+        const x1=A.x+NW/2, y1=A.y+NH/2, x2=B.x+NW/2, y2=B.y+NH/2;
+        const mx=(x1+x2)/2;
+        const p=document.createElementNS("http://www.w3.org/2000/svg","path");
+        p.setAttribute("d",`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`);
+        svg.appendChild(p);
+      });
+    }
+    window.addEventListener("load", ()=> setTimeout(render, 350));
+    let t; window.addEventListener("resize", ()=>{ clearTimeout(t); t=setTimeout(render,150); });
+  })();
+  </script>
+</body>
+</html>

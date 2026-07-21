@@ -1,4 +1,4 @@
-"""Structural validation — pure graph traversal against Neo4j, no LLM.
+"""Structural validation — pure graph traversal against the graph store, no LLM.
 
 Two independent checks, matching the brief's "flag orphans and gaps":
 - stage gaps: a Stage node missing an incoming and/or outgoing PRECEDES edge
@@ -15,22 +15,6 @@ stops being re-surfaced as a fresh question on every run.
 from dataclasses import dataclass
 
 from .graph_store import GraphStore
-
-_STAGE_GAP_QUERY = """
-MATCH (s:Stage {project_id: $project_id})
-OPTIONAL MATCH (s)<-[:PRECEDES]-(pred)
-OPTIONAL MATCH (s)-[:PRECEDES]->(succ)
-WITH s, count(DISTINCT pred) AS pred_count, count(DISTINCT succ) AS succ_count
-WHERE pred_count = 0 OR succ_count = 0
-RETURN s.id AS id, s.name AS name, pred_count AS pred_count, succ_count AS succ_count
-"""
-
-_ORPHAN_QUERY = """
-MATCH (n {project_id: $project_id})
-WHERE NOT (n)--()
-RETURN n.id AS id, n.name AS name, labels(n)[0] AS label
-"""
-
 
 @dataclass
 class StageGap:
@@ -51,7 +35,7 @@ def find_stage_gaps(
 ) -> list[StageGap]:
     acknowledged_ids = acknowledged_ids or set()
     gaps = []
-    for record in store.run(_STAGE_GAP_QUERY, project_id=project_id):
+    for record in store.stage_gap_candidates(project_id):
         if record["id"] in acknowledged_ids:
             continue
         pred_count, succ_count = record["pred_count"], record["succ_count"]
@@ -71,6 +55,6 @@ def find_orphan_entities(
     acknowledged_ids = acknowledged_ids or set()
     return [
         OrphanEntity(entity_id=r["id"], entity_name=r["name"], entity_label=r["label"])
-        for r in store.run(_ORPHAN_QUERY, project_id=project_id)
+        for r in store.orphan_candidates(project_id)
         if r["id"] not in acknowledged_ids
     ]

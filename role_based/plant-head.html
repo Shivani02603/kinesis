@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Plant Head · Kinesis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body data-persona="plant_head" data-active="overview" data-title="Overview"
+      data-subtitle="Whole-plant rollup · every number from your own data">
+  <div class="k-shell">
+    <div id="k-sidebar-mount"></div>
+    <div class="k-main">
+      <div id="k-topbar-mount"></div>
+      <div class="k-content scrollbar-thin" style="overflow-y:auto">
+
+        <h2 class="text-2xl font-extrabold mb-1"><span class="watch">2 of 6</span> areas need attention</h2>
+        <p class="muted text-sm mb-5">Click any area to drill in. Operators see only their own area; you see the rollup.</p>
+
+        <!-- rollup stats -->
+        <div class="grid cols-4 gap-3 mb-5">
+          <div class="k-card k-stat tone-watch"><div class="lab">Machines need attention</div><div class="val">1</div><div class="sub">of 12 monitored</div></div>
+          <div class="k-card k-stat tone-ok"><div class="lab">Orders on track</div><div class="val">18 / 20</div><div class="sub">2 at risk</div></div>
+          <div class="k-card k-stat"><div class="lab">Expected demand (7d)</div><div class="val">4,820</div><div class="sub">units, sum of forecast</div></div>
+          <div class="k-card k-stat tone-watch"><div class="lab">Materials at risk</div><div class="val">1</div><div class="sub">of 5 tracked</div></div>
+        </div>
+
+        <!-- six area cards -->
+        <div class="grid cols-3 gap-4">
+          <a class="k-card k-section" href="maintenance.html" style="text-decoration:none;color:inherit">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs uppercase font-bold faint">Machine Health</span>
+              <span class="material-symbols-outlined watch fill">warning</span>
+            </div>
+            <p class="text-sm font-semibold">Furnace 3 vibration trending up — check within 2 days.</p>
+          </a>
+          <a class="k-card k-section" href="#" style="text-decoration:none;color:inherit">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs uppercase font-bold faint">Quality</span>
+              <span class="material-symbols-outlined ok fill">check_circle</span>
+            </div>
+            <p class="text-sm font-semibold">Reject rate back inside normal range this week.</p>
+          </a>
+          <a class="k-card k-section" href="#" style="text-decoration:none;color:inherit">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs uppercase font-bold faint">Demand</span>
+              <span class="material-symbols-outlined accent fill">trending_up</span>
+            </div>
+            <p class="text-sm font-semibold">Demand up ~9% next week; peak on Thursday.</p>
+          </a>
+          <a class="k-card k-section" href="sales.html" style="text-decoration:none;color:inherit">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs uppercase font-bold faint">Deliveries</span>
+              <span class="material-symbols-outlined watch fill">warning</span>
+            </div>
+            <p class="text-sm font-semibold">2 orders may miss their promised date.</p>
+          </a>
+          <a class="k-card k-section" href="#" style="text-decoration:none;color:inherit">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs uppercase font-bold faint">Materials</span>
+              <span class="material-symbols-outlined watch fill">warning</span>
+            </div>
+            <p class="text-sm font-semibold">Quench oil runs low ~19 Jul — order by 15 Jul.</p>
+          </a>
+          <a class="k-card k-section" href="production-plan.html" style="text-decoration:none;color:inherit">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs uppercase font-bold faint">Production Plan</span>
+              <span class="material-symbols-outlined ok fill">check_circle</span>
+            </div>
+            <p class="text-sm font-semibold">All 12 jobs sequenced; everything done in 41h.</p>
+          </a>
+        </div>
+
+        <p class="text-xs faint mono mt-6">checked just now · rollup of the six operator areas</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="k-proto"><span class="material-symbols-outlined" style="font-size:15px">draw</span>Prototype · sample data for layout</div>
+  <script src="assets/shell.js"></script>
+</body>
+</html>
