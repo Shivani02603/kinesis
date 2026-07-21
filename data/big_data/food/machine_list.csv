@@ -1,0 +1,6 @@
+asset_id,name,description
+AST-01,Dough Mixer DM-1,"Mixes flour, sugar, oil and water into dough"
+AST-02,Sheeter SH-2,Rolls and cuts dough into biscuit shapes
+AST-03,Baking Oven OV-5,Bakes shaped dough at controlled temperature
+AST-04,Cooling Tunnel CT-2,Cools baked biscuits before packing
+AST-05,Packaging Line PK-3,Wraps and cartons finished biscuits

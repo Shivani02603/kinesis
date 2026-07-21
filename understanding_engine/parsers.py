@@ -20,27 +20,33 @@ class ParsedSource:
 
 # Entity extraction's job is to recognize WHICH columns are signals/entities
 # and how they relate to assets — a semantic, structural judgment that a
-# representative sample of rows answers exactly as well as the full file.
-# It is never the step that reads actual data values for computation (that
-# is the Computation Engine, reading source_reference straight from disk
-# later). Sending every row of a real operational-size file here only
-# inflates the prompt — observed in practice to push a single extraction
-# call to ~35,000 tokens on a 1,440-row file, enough on its own to exceed a
-# provider's per-minute token budget regardless of how many requests it
-# allows. The sample is labeled honestly so the LLM (and anyone reading the
-# intermediate text) knows it is not the whole file.
-_CSV_SAMPLE_ROWS = 15
+# sample of rows answers exactly as well as the full file. It is never the step
+# that reads actual data values for computation (that is the Computation Engine,
+# reading source_reference straight from disk later). So no matter how large a
+# real dataset is, only this small sample is ever sent to the model; the millions
+# of rows never touch the LLM. 50 rows (up from 15) because a capable model with a
+# large token budget can use a richer sample for better extraction, and it's still
+# a tiny prompt. The sample is labeled honestly so the model (and anyone reading
+# the intermediate text) knows it is not the whole file.
+_CSV_SAMPLE_ROWS = 50
 
 
 def parse_csv(path: Path) -> ParsedSource:
+    # Streamed, not list(reader): a big operational file (millions of rows) must not
+    # be pulled into memory just to sample the first few. We keep only the sample
+    # rows and a running count, so memory stays bounded no matter the file size.
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         columns = reader.fieldnames or []
-        rows = list(reader)
-    lines = [f"Source file: {path.name} (tabular)", f"Columns: {', '.join(columns)}", f"Total rows: {len(rows)}", ""]
-    sample = rows[:_CSV_SAMPLE_ROWS]
-    if len(rows) > _CSV_SAMPLE_ROWS:
-        lines.append(f"Showing the first {_CSV_SAMPLE_ROWS} of {len(rows)} rows as a representative sample:")
+        sample: list[dict] = []
+        total = 0
+        for row in reader:
+            total += 1
+            if len(sample) < _CSV_SAMPLE_ROWS:
+                sample.append(row)
+    lines = [f"Source file: {path.name} (tabular)", f"Columns: {', '.join(columns)}", f"Total rows: {total}", ""]
+    if total > _CSV_SAMPLE_ROWS:
+        lines.append(f"Showing the first {_CSV_SAMPLE_ROWS} of {total} rows as a sample:")
     for i, row in enumerate(sample, start=1):
         fields = " | ".join(f"{col}={row.get(col, '')}" for col in columns)
         lines.append(f"Row {i}: {fields}")

@@ -156,7 +156,7 @@ def train_forecasting(
     assembled: AssembledData,
     model_dir: Path,
     prediction_length: int | None = None,
-    time_limit: int = 600,
+    time_limit: int | None = 600,
 ) -> dict:
     from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 
@@ -250,7 +250,7 @@ def train_supervised(
     label_column: str,
     label_kind: str,
     model_dir: Path,
-    time_limit: int = 600,
+    time_limit: int | None = 600,
 ) -> dict:
     from autogluon.tabular import TabularPredictor
 

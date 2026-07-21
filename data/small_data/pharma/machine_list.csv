@@ -1,0 +1,6 @@
+asset_id,name,description
+AST-01,Granulator GR-2,Wet granulation of API and excipient blend
+AST-02,Fluid Bed Dryer FBD-1,Dries granules to target moisture
+AST-03,Tablet Press TP-4,Compresses granules into tablets
+AST-04,Coating Machine CT-3,Applies film coating to tablets
+AST-05,Blister Line BL-6,Seals tablets into blister packs

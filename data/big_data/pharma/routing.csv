@@ -1,0 +1,6 @@
+sequence,machine,units_per_hour
+1,Granulator GR-2,50
+2,Fluid Bed Dryer FBD-1,60
+3,Tablet Press TP-4,300
+4,Coating Machine CT-3,250
+5,Blister Line BL-6,400

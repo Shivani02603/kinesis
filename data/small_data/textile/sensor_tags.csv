@@ -1,0 +1,7 @@
+tag_id,description,unit
+BR1_VIB,Blowroom BR-1 condition-monitoring vibration,mm/s
+CD3_VIB,Carding Machine CD-3 condition-monitoring vibration,mm/s
+RF5_VIB,Ring Frame RF-5 condition-monitoring vibration,mm/s
+AC2_VIB,Autoconer AC-2 condition-monitoring vibration,mm/s
+LM7_VIB,Loom LM-7 condition-monitoring vibration,mm/s
+YARN_DEFECT_RATE,Percent of yarn length flagged for thick/thin place defects,%

@@ -5,52 +5,62 @@ Run standalone:  uvicorn app:app --port 9000   (from inside factory_data_simulat
 This is deliberately a SEPARATE service from Kinesis: it plays the role of the
 factory's own sensor database. Kinesis connects to it over these endpoints and
 pulls deltas — it does not share a process or a database with Kinesis.
+
+Multi-tenant: one process stands in for every industry's factory. The industry
+is part of the URL (`/steel/tables`, `/textile/tables`, ...), never fixed at
+startup, so a company's "data source base URL" is simply
+`http://<host>:9000/<industry>` — the same connector code that already appends
+`/tables`, `/data/{table}`, `/status` to a base URL needs no changes.
 """
 
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 import simulator
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    simulator.init_db()
-    if not simulator.seeded():
-        simulator.seed_from_fixtures()
-    yield
-
-
-app = FastAPI(title="Factory Data Simulator", lifespan=lifespan)
+app = FastAPI(title="Factory Data Simulator")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
 
-@app.get("/tables")
-def tables():
-    return simulator.list_tables()
+def _industry_or_404(industry: str) -> None:
+    try:
+        simulator.ensure_seeded(industry)
+    except simulator.UnknownIndustry as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.get("/data/{table}")
-def data(table: str, since: str | None = None):
+@app.get("/industries")
+def industries():
+    return {"industries": simulator.list_industries()}
+
+
+@app.get("/{industry}/tables")
+def tables(industry: str):
+    _industry_or_404(industry)
+    return simulator.list_tables(industry)
+
+
+@app.get("/{industry}/data/{table}")
+def data(industry: str, table: str, since: str | None = None):
     """The delta pull: rows newer than `since`. Kinesis calls this with the last
     timestamp it already has for that table, so it only ever gets new rows."""
-    return {"table": table, "since": since, "rows": simulator.get_rows(table, since)}
+    _industry_or_404(industry)
+    return {"table": table, "since": since, "rows": simulator.get_rows(industry, table, since)}
 
 
 class AdvanceBody(BaseModel):
     hours: int = 24
 
 
-@app.post("/advance")
-def advance(body: AdvanceBody):
-    generated = simulator.advance(max(1, body.hours))
-    return {"advanced_hours": body.hours, "generated_rows": generated, "status": simulator.status()}
+@app.post("/{industry}/advance")
+def advance(industry: str, body: AdvanceBody):
+    _industry_or_404(industry)
+    generated = simulator.advance(industry, max(1, body.hours))
+    return {"advanced_hours": body.hours, "generated_rows": generated, "status": simulator.status(industry)}
 
 
 class DegradeBody(BaseModel):
@@ -58,32 +68,50 @@ class DegradeBody(BaseModel):
     on: bool = True
 
 
-@app.post("/degrade")
-def degrade(body: DegradeBody):
-    ok = simulator.set_degrade(body.signal, body.on)
-    return {"signal": body.signal, "degrade": body.on, "applied": ok, "status": simulator.status()}
+@app.post("/{industry}/degrade")
+def degrade(industry: str, body: DegradeBody):
+    _industry_or_404(industry)
+    ok = simulator.set_degrade(industry, body.signal, body.on)
+    return {"signal": body.signal, "degrade": body.on, "applied": ok, "status": simulator.status(industry)}
 
 
-@app.post("/reseed")
-def reseed():
-    """Wipe and re-seed from the real fixtures — resets the whole simulation."""
-    import os
-
-    if simulator.SIM_DB.exists():
-        os.remove(simulator.SIM_DB)
-    simulator.init_db()
-    simulator.seed_from_fixtures()
-    return {"reseeded": True, "status": simulator.status()}
+@app.post("/{industry}/reseed")
+def reseed(industry: str):
+    """Wipe and re-seed this industry from its real fixtures — resets its simulation only."""
+    _industry_or_404(industry)
+    simulator.reseed(industry)
+    return {"reseeded": True, "status": simulator.status(industry)}
 
 
-@app.get("/status")
-def status():
-    return simulator.status()
+@app.get("/{industry}/status")
+def status(industry: str):
+    _industry_or_404(industry)
+    return simulator.status(industry)
 
 
 @app.get("/", response_class=HTMLResponse)
-def control_panel():
-    st = simulator.status()
+def home():
+    inds = simulator.list_industries()
+    links = "".join(f'<li><a href="/{i}">{i}</a></li>' for i in inds)
+    return f"""
+    <html><head><title>Factory Data Simulator</title>
+    <style>
+      body {{ font-family: Inter, system-ui, sans-serif; max-width: 720px; margin: 2rem auto; color:#0b1c30; }}
+      a {{ color:#0f52ba; }}
+    </style></head>
+    <body>
+      <h1>🏭 Factory Data Simulator</h1>
+      <p>One instance, every industry. Pick one to open its control panel, or point a
+      company's data-source URL at <code>http://&lt;host&gt;/&lt;industry&gt;</code> directly.</p>
+      <ul>{links}</ul>
+    </body></html>
+    """
+
+
+@app.get("/{industry}", response_class=HTMLResponse)
+def control_panel(industry: str):
+    _industry_or_404(industry)
+    st = simulator.status(industry)
     signal_rows = "".join(
         f"<tr><td>{s['signal']}</td><td>{s['table']}</td>"
         f"<td><button onclick=\"degrade('{s['signal']}', {str(not s['degrade']).lower()})\">"
@@ -94,7 +122,7 @@ def control_panel():
     )
     table_rows = "".join(f"<li>{t['table']} — latest: <b>{t['latest']}</b></li>" for t in st["tables"])
     return f"""
-    <html><head><title>Factory Data Simulator</title>
+    <html><head><title>Factory Data Simulator — {industry}</title>
     <style>
       body {{ font-family: Inter, system-ui, sans-serif; max-width: 720px; margin: 2rem auto; color:#0b1c30; }}
       h1 {{ font-size: 1.3rem; }} table {{ border-collapse: collapse; width: 100%; margin-top:.5rem; }}
@@ -103,10 +131,13 @@ def control_panel():
       button.sec {{ background:#fff; color:#0f52ba; }}
       .bar {{ display:flex; gap:.5rem; align-items:center; margin:1rem 0; }}
       input {{ width:70px; padding:.35rem; border:1px solid #d3e4fe; border-radius:6px; }}
+      a.back {{ color:#0f52ba; font-size:.85rem; }}
     </style></head>
     <body>
-      <h1>🏭 Factory Data Simulator</h1>
-      <p>This stands in for the plant's real sensor database. Kinesis connects here and pulls new readings.</p>
+      <a class="back" href="/">&larr; all industries</a>
+      <h1>🏭 Factory Data Simulator — {industry}</h1>
+      <p>This stands in for {industry}'s real sensor database. Kinesis connects to
+      <code>/{industry}/...</code> and pulls new readings.</p>
       <h3>Tables (latest generated point)</h3>
       <ul>{table_rows}</ul>
       <div class="bar">
@@ -117,18 +148,19 @@ def control_panel():
       <h3>Signals — flip one to "degrade" then generate, to show a machine drifting out of normal</h3>
       <table><tr><th>Signal</th><th>Table</th><th>Degrade</th></tr>{signal_rows}</table>
       <script>
+        const industry = {industry!r};
         async function advance() {{
           const hours = Number(document.getElementById('hrs').value) || 24;
-          await fetch('/advance', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{hours}})}});
+          await fetch(`/${{industry}}/advance`, {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{hours}})}});
           location.reload();
         }}
         async function degrade(signal, on) {{
-          await fetch('/degrade', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{signal, on}})}});
+          await fetch(`/${{industry}}/degrade`, {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{signal, on}})}});
           location.reload();
         }}
         async function reseed() {{
-          if (!confirm('Reset the simulation back to the original fixtures?')) return;
-          await fetch('/reseed', {{method:'POST'}}); location.reload();
+          if (!confirm('Reset this industry back to the original fixtures?')) return;
+          await fetch(`/${{industry}}/reseed`, {{method:'POST'}}); location.reload();
         }}
       </script>
     </body></html>

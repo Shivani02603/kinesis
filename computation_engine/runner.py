@@ -36,7 +36,7 @@ def run_training(
     supporting_signals: list[dict],
     upload_dir: Path,
     model_dir: Path,
-    time_limit: int = 600,
+    time_limit: int | None = 600,
     settings: dict[str, str] | None = None,
     graph_context: "GraphMaintenanceContext | None" = None,
 ) -> TrainingRunResult:

@@ -1,0 +1,7 @@
+tag_id,description,unit
+DM1_VIB,Dough Mixer DM-1 condition-monitoring vibration,mm/s
+SH2_VIB,Sheeter SH-2 condition-monitoring vibration,mm/s
+OV5_VIB,Baking Oven OV-5 condition-monitoring vibration,mm/s
+CT2_VIB,Cooling Tunnel CT-2 condition-monitoring vibration,mm/s
+PK3_VIB,Packaging Line PK-3 condition-monitoring vibration,mm/s
+MOISTURE_OUT_OF_SPEC_RATE,Percent of batches rejected for out-of-spec moisture,%

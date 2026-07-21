@@ -12,6 +12,12 @@ with mean-reversion toward its historical baseline plus noise. A per-signal
 "degrade" switch adds a genuine upward drift so a machine can be shown slowly
 going out of its normal range — which is what makes a retrain visibly catch it.
 Nothing here is a scripted "now it's broken" canned event.
+
+Multi-tenant: one running process serves every industry under DATA_ROOT. The
+industry is not fixed at startup — every function takes it as a parameter, and
+each industry gets its own SQLite file (`sim_<industry>.db`) so their generated
+data never mixes. This is what lets one deployed instance stand in for every
+company's factory instead of one process per industry.
 """
 
 import csv
@@ -23,18 +29,44 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 
-SIM_DB = Path(__file__).parent / "sim.db"
-SEED_DIR = Path(os.environ.get("SEED_DIR", Path(__file__).parent.parent / "data" / "steel_heat_treatment_small"))
+BASE_DIR = Path(__file__).parent
+# Point this at the folder that holds one subfolder per industry
+# (data/simulator_data/<industry>/*.csv). Nothing here is steel-specific — the
+# tables and their signal columns are all discovered from the files, so any
+# industry subfolder works the same way.
+DATA_ROOT = Path(os.environ.get("SIMULATOR_DATA_ROOT", BASE_DIR.parent / "data" / "simulator_data"))
 
-# The two time-series tables that actually drive predictions. Both are seeded from
-# the real fixtures; their signal columns are read from the file headers, never
-# hardcoded here.
-SEED_TABLES = ["sensor_readings.csv", "inspection_readings.csv"]
+
+class UnknownIndustry(ValueError):
+    pass
+
+
+def list_industries() -> list[str]:
+    """Every subfolder of DATA_ROOT that actually has CSVs in it — this is the
+    live list of factories this instance can stand in for."""
+    if not DATA_ROOT.is_dir():
+        return []
+    return sorted(p.name for p in DATA_ROOT.iterdir() if p.is_dir() and any(p.glob("*.csv")))
+
+
+def _seed_dir(industry: str) -> Path:
+    return DATA_ROOT / industry
+
+
+def _require_industry(industry: str) -> Path:
+    d = _seed_dir(industry)
+    if not d.is_dir():
+        raise UnknownIndustry(f"no such industry: {industry!r} (known: {list_industries()})")
+    return d
+
+
+def _db_path(industry: str) -> Path:
+    return BASE_DIR / f"sim_{industry}.db"
 
 
 @contextmanager
-def _conn():
-    conn = sqlite3.connect(SIM_DB)
+def _conn(industry: str):
+    conn = sqlite3.connect(_db_path(industry))
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -56,8 +88,8 @@ def _fmt_ts(dt: datetime, daily: bool) -> str:
     return dt.strftime("%Y-%m-%d") if daily else dt.strftime("%Y-%m-%d %H:%M")
 
 
-def init_db() -> None:
-    with _conn() as conn:
+def init_db(industry: str) -> None:
+    with _conn(industry) as conn:
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS meta (
@@ -87,28 +119,67 @@ def init_db() -> None:
         )
 
 
-def seeded() -> bool:
-    with _conn() as conn:
+def seeded(industry: str) -> bool:
+    with _conn(industry) as conn:
         return conn.execute("SELECT COUNT(*) AS c FROM meta").fetchone()["c"] > 0
 
 
-def seed_from_fixtures() -> None:
-    """Load the real fixture rows as 'history so far' and compute each signal's
-    baseline (mean/std) from that history — so generated data continues the real
-    pattern rather than starting from nothing."""
-    for table in SEED_TABLES:
-        path = SEED_DIR / table
-        if not path.exists():
-            continue
+def ensure_seeded(industry: str) -> None:
+    """Validate the industry exists, then init + seed its own db on first use.
+    Called at the top of every endpoint so a brand-new industry works with zero
+    setup beyond dropping its folder under DATA_ROOT."""
+    _require_industry(industry)
+    init_db(industry)
+    if not seeded(industry):
+        seed_from_fixtures(industry)
+
+
+def _is_time_series_csv(header: list[str], rows: list[list[str]]) -> bool:
+    """A table this simulator can continue = a date/time first column, and EVERY
+    other column numeric (a genuine sensor/metric-over-time table). This is what
+    lets the simulator work for any industry from its files alone: it skips
+    machine lists, routings, orders (non-date key or non-numeric columns) and
+    keeps only real time-series, without any hardcoded filename list."""
+    if not header or len(header) < 2 or not rows:
+        return False
+    try:
+        for r in rows:
+            _parse_ts(r[0])
+    except (ValueError, IndexError):
+        return False
+    for r in rows:
+        for cell in r[1:]:
+            cell = cell.strip()
+            if cell == "":
+                continue
+            try:
+                float(cell)
+            except ValueError:
+                return False
+    return True
+
+
+def seed_from_fixtures(industry: str) -> None:
+    """Auto-discover every time-series table in this industry's folder and load
+    its rows as 'history so far', computing each signal's baseline (mean/std) so
+    generated data continues the real pattern. No hardcoded table names — any
+    industry folder seeds whatever real time-series files are there."""
+    seed_dir = _require_industry(industry)
+    for path in sorted(seed_dir.glob("*.csv")):
         with open(path, newline="", encoding="utf-8") as f:
             reader = csv.reader(f)
-            header = next(reader)
+            header = next(reader, None)
+            if header is None:
+                continue
             data_rows = [r for r in reader if any(c.strip() for c in r)]
+        if not _is_time_series_csv(header, data_rows[:20]):
+            continue
+        table = path.name
         key_col = header[0]
         signal_cols = header[1:]
         daily = ":" not in (data_rows[0][0] if data_rows else "")
 
-        with _conn() as conn:
+        with _conn(industry) as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO meta (table_name, key_col, signal_cols, daily) VALUES (?, ?, ?, ?)",
                 (table, key_col, json.dumps(signal_cols), 1 if daily else 0),
@@ -142,11 +213,11 @@ def _last_ts(conn, table: str) -> datetime | None:
     return _parse_ts(row["m"]) if row and row["m"] else None
 
 
-def advance(hours: int) -> dict:
+def advance(industry: str, hours: int) -> dict:
     """Generate `hours` more hours of data on every table. Hourly tables get one
     row per hour; daily tables get one row per day boundary crossed."""
     generated: dict[str, int] = {}
-    with _conn() as conn:
+    with _conn(industry) as conn:
         metas = conn.execute("SELECT * FROM meta").fetchall()
         for meta in metas:
             table = meta["table_name"]
@@ -204,8 +275,8 @@ def advance(hours: int) -> dict:
     return generated
 
 
-def set_degrade(signal_col: str, on: bool) -> bool:
-    with _conn() as conn:
+def set_degrade(industry: str, signal_col: str, on: bool) -> bool:
+    with _conn(industry) as conn:
         if on:
             cur = conn.execute("UPDATE baseline SET degrade = 1 WHERE signal_col = ?", (signal_col,))
         else:
@@ -217,8 +288,8 @@ def set_degrade(signal_col: str, on: bool) -> bool:
         return cur.rowcount > 0
 
 
-def list_tables() -> list[dict]:
-    with _conn() as conn:
+def list_tables(industry: str) -> list[dict]:
+    with _conn(industry) as conn:
         out = []
         for m in conn.execute("SELECT * FROM meta").fetchall():
             n = conn.execute("SELECT COUNT(*) AS c FROM rows WHERE table_name = ?", (m["table_name"],)).fetchone()["c"]
@@ -233,10 +304,10 @@ def list_tables() -> list[dict]:
         return out
 
 
-def get_rows(table: str, since: str | None) -> list[dict]:
+def get_rows(industry: str, table: str, since: str | None) -> list[dict]:
     """Rows whose key (timestamp/date) is strictly after `since` — the delta.
     String comparison is correct here because the key format is ISO-ordered."""
-    with _conn() as conn:
+    with _conn(industry) as conn:
         if since:
             rows = conn.execute(
                 "SELECT payload FROM rows WHERE table_name = ? AND key_val > ? ORDER BY key_val",
@@ -249,8 +320,17 @@ def get_rows(table: str, since: str | None) -> list[dict]:
     return [json.loads(r["payload"]) for r in rows]
 
 
-def status() -> dict:
-    with _conn() as conn:
+def reseed(industry: str) -> None:
+    """Wipe this industry's db and re-seed from its real fixtures."""
+    db = _db_path(industry)
+    if db.exists():
+        os.remove(db)
+    init_db(industry)
+    seed_from_fixtures(industry)
+
+
+def status(industry: str) -> dict:
+    with _conn(industry) as conn:
         tables = []
         for m in conn.execute("SELECT * FROM meta").fetchall():
             last = _last_ts(conn, m["table_name"])

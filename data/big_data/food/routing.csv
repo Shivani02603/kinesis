@@ -1,0 +1,6 @@
+sequence,machine,units_per_hour
+1,Dough Mixer DM-1,150
+2,Sheeter SH-2,140
+3,Baking Oven OV-5,120
+4,Cooling Tunnel CT-2,130
+5,Packaging Line PK-3,200

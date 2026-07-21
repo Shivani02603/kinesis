@@ -383,11 +383,13 @@ function ConnectionsTab({ projectId }: { projectId: string }) {
         <h3 className="text-sm font-extrabold mb-1">Source connection</h3>
         <p className="text-xs text-[var(--text-muted)] mb-3">
           The data source&apos;s base URL (the factory data simulator, or a real ERP/historian with the same API).
+          The simulator serves every industry from one instance — end the URL with this company&apos;s industry,
+          e.g. <code>http://localhost:9000/steel</code>.
         </p>
         <div className="flex gap-2 flex-wrap">
           <input
             className="flex-1 min-w-[240px] border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-[var(--bg)]"
-            placeholder="http://localhost:9000"
+            placeholder="http://localhost:9000/steel"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />

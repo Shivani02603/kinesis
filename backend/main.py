@@ -559,6 +559,25 @@ def get_feasibility(project_id: str, objective: str = "maintenance"):
 
 MODEL_ROOT = Path(__file__).parent / "models"
 
+# How long AutoGluon may train per objective. It's a bound, not a target — AutoGluon
+# returns as soon as it's done, so a small dataset finishes fast regardless. Bigger
+# datasets need a bigger budget or they get cut short, so it's a per-project setting
+# (key below); 30 min is a sane default. Set it to 0 in settings for no limit (only
+# when you accept a run may take a very long time and hold the queue).
+_TRAINING_TIME_LIMIT_KEY = "computation.time_limit_seconds"
+_DEFAULT_TRAINING_TIME_LIMIT = 1800  # 30 minutes
+
+
+def _resolve_training_time_limit(project_id: str) -> int | None:
+    raw = db.get_settings(project_id).get(_TRAINING_TIME_LIMIT_KEY)
+    if raw is None or str(raw).strip() == "":
+        return _DEFAULT_TRAINING_TIME_LIMIT
+    try:
+        seconds = int(float(raw))
+    except (TypeError, ValueError):
+        return _DEFAULT_TRAINING_TIME_LIMIT
+    return None if seconds <= 0 else seconds  # 0 / negative = no limit
+
 
 # Queued runs execute one at a time: AutoGluon already parallelizes across
 # every CPU core internally, so two trainings at once don't finish sooner —
@@ -610,6 +629,7 @@ def _execute_training_run(run_id: str, project_id: str, objective: str, model_di
                 supporting_signals=[asdict(s) for s in verdict.supporting_signals],
                 upload_dir=UPLOAD_ROOT / project_id,
                 model_dir=model_dir,
+                time_limit=_resolve_training_time_limit(project_id),
                 settings=db.get_settings(project_id),
                 graph_context=graph_context,
             )

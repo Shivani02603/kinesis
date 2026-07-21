@@ -1,0 +1,7 @@
+tag_id,description,unit
+GR2_VIB,Granulator GR-2 condition-monitoring vibration,mm/s
+FBD1_VIB,Fluid Bed Dryer FBD-1 condition-monitoring vibration,mm/s
+TP4_VIB,Tablet Press TP-4 condition-monitoring vibration,mm/s
+CT3_VIB,Coating Machine CT-3 condition-monitoring vibration,mm/s
+BL6_VIB,Blister Line BL-6 condition-monitoring vibration,mm/s
+TABLET_REJECT_RATE,Percent of tablets rejected for weight or hardness deviation,%

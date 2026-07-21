@@ -758,6 +758,70 @@ function ObjectiveSection({
   );
 }
 
+// How long AutoGluon may train per objective, as a per-project setting (minutes in
+// the UI, stored as seconds). A bound, not a target — small data finishes fast
+// regardless; big data needs a bigger budget or it gets cut short. 0 = no limit.
+const TIME_LIMIT_KEY = "computation.time_limit_seconds";
+const DEFAULT_TIME_LIMIT_MIN = 30;
+
+function TimeBudgetControl({ projectId }: { projectId: string }) {
+  const [minutes, setMinutes] = useState<string>(String(DEFAULT_TIME_LIMIT_MIN));
+  const [open, setOpen] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    api.getSettings(projectId).then((s) => {
+      const secs = s[TIME_LIMIT_KEY];
+      if (secs != null && secs !== "") setMinutes(String(Math.round(Number(secs) / 60)));
+    });
+  }, [projectId]);
+
+  async function save() {
+    const mins = Number(minutes);
+    const seconds = Number.isFinite(mins) && mins > 0 ? Math.round(mins * 60) : 0; // 0 = no limit
+    await api.putSetting(projectId, TIME_LIMIT_KEY, String(seconds));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+    setOpen(false);
+  }
+
+  const label = Number(minutes) > 0 ? `${minutes} min` : "no limit";
+  return (
+    <div className="relative">
+      <button
+        className="btn btn-outline text-xs px-3 py-1.5 flex items-center gap-1"
+        onClick={() => setOpen((v) => !v)}
+        title="How long each objective may train"
+      >
+        <span className="material-symbols-outlined text-[16px]">timer</span>
+        Training time: {label}
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 z-10 w-64 bg-white rounded-lg border border-[var(--border)] shadow-[var(--shadow-card)] p-3 space-y-2">
+          <p className="text-xs text-[var(--text-muted)]">
+            Max minutes AutoGluon may train each objective. Small data finishes early anyway; bigger data needs more or
+            it gets cut short.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              className="w-20 border border-[var(--border)] rounded-md px-2 py-1 text-sm bg-[var(--bg)]"
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+            />
+            <span className="text-xs text-[var(--text-faint)]">minutes (0 = no limit)</span>
+          </div>
+          <button className="btn btn-primary text-xs px-3 py-1.5 w-full" onClick={save}>
+            Save
+          </button>
+        </div>
+      )}
+      {saved && <span className="absolute -bottom-4 right-0 text-[10px] text-[var(--success)]">Saved</span>}
+    </div>
+  );
+}
+
 export function ComputationPanel({
   projectId,
   hasConfirmedVersion,
@@ -802,11 +866,14 @@ export function ComputationPanel({
             One dashboard for every objective — feasibility and trained results, side by side.
           </p>
         </div>
-        {hasConfirmedVersion && (
-          <button className="btn btn-primary text-xs px-3 py-1.5 flex-none" onClick={handleTrainAll} disabled={trainingAll}>
-            {trainingAll ? "Queueing…" : `Train all ${OBJECTIVES.length}`}
-          </button>
-        )}
+        <div className="flex items-center gap-2 flex-none">
+          {hasConfirmedVersion && <TimeBudgetControl projectId={projectId} />}
+          {hasConfirmedVersion && (
+            <button className="btn btn-primary text-xs px-3 py-1.5" onClick={handleTrainAll} disabled={trainingAll}>
+              {trainingAll ? "Queueing…" : `Train all ${OBJECTIVES.length}`}
+            </button>
+          )}
+        </div>
       </div>
       {trainAllMsg && <p className="text-xs text-[var(--text-muted)]">{trainAllMsg}</p>}
 
