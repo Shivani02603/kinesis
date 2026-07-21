@@ -6,32 +6,77 @@ on it; two projects sharing one Aura instance never see each other's data.
 """
 
 import os
+import time
 
 from neo4j import GraphDatabase
+from neo4j.exceptions import ServiceUnavailable, SessionExpired, TransientError
 
 from .schemas import Entity, Relationship
+
+# Aura silently drops idle connections. Measured behaviour: after a long gap (e.g.
+# a 6-minute AutoGluon fit between two graph reads) the DRIVER's own routing table
+# goes stale, and every later query fails with "Unable to retrieve routing
+# information" — opening a fresh session from the same driver keeps failing, which
+# is why only a full process restart used to clear it. So a retry here is not
+# enough on its own: the driver itself is rebuilt between attempts. Every query we
+# run is idempotent (MERGE / DETACH DELETE / read), so re-running one is safe.
+_RETRYABLE = (ServiceUnavailable, SessionExpired, TransientError)
+_RETRY_ATTEMPTS = 4
+_RETRY_BASE_DELAY = 1.0  # seconds; doubles each attempt
 
 
 class GraphStore:
     def __init__(self, uri: str | None = None, user: str | None = None, password: str | None = None):
-        uri = uri or os.environ["NEO4J_URI"]
-        user = user or os.environ.get("NEO4J_USER", "neo4j")
-        password = password or os.environ["NEO4J_PASSWORD"]
+        self._uri = uri or os.environ["NEO4J_URI"]
+        self._user = user or os.environ.get("NEO4J_USER", "neo4j")
+        self._password = password or os.environ["NEO4J_PASSWORD"]
         self._database = os.environ.get("NEO4J_DATABASE") or None
-        # Aura's load balancer silently drops idle connections; without a lifetime
-        # cap the pool hands back dead sockets after quiet periods (SessionExpired /
-        # "unable to retrieve routing information" on the first query after idling).
-        # Capping lifetime + keep_alive makes the pool discard before Aura does.
-        self._driver = GraphDatabase.driver(
-            uri, auth=(user, password), max_connection_lifetime=300, keep_alive=True
+        self._driver = self._new_driver()
+
+    def _new_driver(self):
+        # Capping connection lifetime + keep_alive makes the pool discard sockets
+        # before Aura does; the rebuild in run() covers the case where the routing
+        # table itself has already gone bad.
+        return GraphDatabase.driver(
+            self._uri, auth=(self._user, self._password), max_connection_lifetime=300, keep_alive=True
         )
+
+    def _rebuild_driver(self) -> None:
+        try:
+            self._driver.close()
+        except Exception:  # noqa: BLE001 — the old driver is being thrown away anyway
+            pass
+        self._driver = self._new_driver()
 
     def close(self) -> None:
         self._driver.close()
 
     def run(self, query: str, **params) -> list[dict]:
-        with self._driver.session(database=self._database) as session:
-            return [record.data() for record in session.run(query, **params)]
+        last_error: Exception | None = None
+        for attempt in range(_RETRY_ATTEMPTS):
+            try:
+                with self._driver.session(database=self._database) as session:
+                    return [record.data() for record in session.run(query, **params)]
+            except _RETRYABLE as exc:
+                last_error = exc
+                if attempt == _RETRY_ATTEMPTS - 1:
+                    break
+                delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                print(
+                    f"[graph_store] transient Neo4j error (attempt {attempt + 1}/{_RETRY_ATTEMPTS}), "
+                    f"rebuilding driver and retrying in {delay:.0f}s: {exc}"
+                )
+                self._rebuild_driver()
+                time.sleep(delay)
+        # The driver's own message ("Unable to retrieve routing information") says
+        # nothing a user can act on. Once retries + a driver rebuild have all failed,
+        # the database really is unreachable, so say that plainly and point at the
+        # one thing that actually fixes it.
+        raise ServiceUnavailable(
+            f"Could not reach the graph database (Neo4j) after {_RETRY_ATTEMPTS} attempts — "
+            "the instance is most likely paused or restarting. Check the Neo4j Aura console "
+            f"and resume it, then run this again. Driver error: {last_error}"
+        ) from last_error
 
     def upsert_entity(self, project_id: str, entity: Entity) -> None:
         label = entity.entity_type.value.capitalize()
@@ -140,6 +185,16 @@ class GraphStore:
             "MATCH (absorbed {project_id: $project_id, id: $absorbed_id}) DETACH DELETE absorbed",
             project_id=project_id, absorbed_id=absorbed_id,
         )
+
+    def count_nodes(self, project_id: str, label: str) -> int:
+        """A single COUNT query — used where only the number matters (e.g. a
+        companies list), so listing many projects doesn't pull every node and
+        edge of every project's graph over the network just to size a badge."""
+        rows = self.run(
+            f"MATCH (n:{label} {{project_id: $project_id}}) RETURN count(n) AS c",
+            project_id=project_id,
+        )
+        return rows[0]["c"] if rows else 0
 
     def fetch_graph(self, project_id: str) -> dict:
         """Nodes + edges for this project, shaped for frontend graph rendering."""

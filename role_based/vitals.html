@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Plant vitals · Kinesis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+  <style>
+    /* ECG "graph paper" — faint grid behind each trace */
+    .ecg-wrap { position:relative; border-radius:10px; overflow:hidden;
+      background:
+        linear-gradient(rgba(15,82,186,.05) 1px, transparent 1px) 0 0/100% 15px,
+        linear-gradient(90deg, rgba(15,82,186,.05) 1px, transparent 1px) 0 0/15px 100%,
+        var(--surface);
+    }
+    .ecg-wrap.major {
+      background:
+        linear-gradient(rgba(15,82,186,.09) 1px, transparent 1px) 0 0/100% 30px,
+        linear-gradient(90deg, rgba(15,82,186,.09) 1px, transparent 1px) 0 0/30px 100%,
+        linear-gradient(rgba(15,82,186,.045) 1px, transparent 1px) 0 0/100% 15px,
+        linear-gradient(90deg, rgba(15,82,186,.045) 1px, transparent 1px) 0 0/15px 100%,
+        var(--surface);
+    }
+    .ecg-wrap canvas { display:block; width:100%; height:100%; }
+
+    .organ { transition:box-shadow .3s, border-color .3s; }
+    .organ-watch { border-color:var(--warning) !important; animation:breathe 2.2s ease-in-out infinite; }
+    @keyframes breathe {
+      0%,100% { box-shadow:0 0 0 0 rgba(147,62,0,.0), var(--shadow-card); }
+      50%     { box-shadow:0 0 0 4px rgba(147,62,0,.10), var(--shadow-card); }
+    }
+    .live-dot { width:.5rem;height:.5rem;border-radius:999px;display:inline-block;position:relative; }
+    .live-dot::after { content:"";position:absolute;inset:-4px;border-radius:999px;border:2px solid currentColor;opacity:.4;animation:ring 1.6s ease-out infinite; }
+    @keyframes ring { 0%{transform:scale(.6);opacity:.5} 100%{transform:scale(1.5);opacity:0} }
+    .bpm { font-variant-numeric:tabular-nums; }
+    .reading { font-variant-numeric:tabular-nums; }
+  </style>
+</head>
+<body data-persona="plant_head" data-active="vitals" data-title="Plant vitals — live"
+      data-subtitle="The whole plant as one living body · every machine has a pulse">
+  <div class="k-shell">
+    <div id="k-sidebar-mount"></div>
+    <div class="k-main">
+      <div id="k-topbar-mount"></div>
+      <div class="k-content scrollbar-thin" style="overflow-y:auto">
+
+        <!-- master plant pulse -->
+        <div class="k-card k-section mb-4">
+          <div class="flex items-center justify-between gap-4 flex-wrap mb-3">
+            <div class="flex items-center gap-4">
+              <div>
+                <div class="text-xs uppercase font-bold faint">Plant health</div>
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl font-extrabold watch">Stable · 1 watch</span>
+                </div>
+                <div class="text-xs muted">One machine’s rhythm is drifting — the rest are steady.</div>
+              </div>
+              <div style="width:1px;height:44px;background:var(--border)"></div>
+              <div>
+                <div class="text-xs uppercase font-bold faint">Plant pulse</div>
+                <div class="text-2xl font-extrabold bpm" id="bpm">98</div>
+                <div class="text-xs muted">beats · steady tempo</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="text-center"><div class="text-2xl font-extrabold ok" id="cSteady">5</div><div class="text-xs faint uppercase font-bold">Steady</div></div>
+              <div class="text-center"><div class="text-2xl font-extrabold watch" id="cWatch">1</div><div class="text-xs faint uppercase font-bold">Watch</div></div>
+              <div class="text-center"><div class="text-2xl font-extrabold faint" id="cCrit">0</div><div class="text-xs faint uppercase font-bold">Critical</div></div>
+            </div>
+          </div>
+          <div class="ecg-wrap major" style="height:100px"><canvas id="master"></canvas></div>
+        </div>
+
+        <!-- organ grid -->
+        <div class="grid cols-3 gap-4" id="organs"></div>
+
+        <!-- attention -->
+        <div class="k-card k-section mt-4" style="border:1px solid var(--warning)">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex items-center gap-3">
+              <span class="icon-tile" style="background:var(--warning-soft);color:var(--warning)"><span class="material-symbols-outlined fill">monitor_heart</span></span>
+              <div>
+                <div class="font-extrabold">Furnace 3 — rhythm drifting</div>
+                <div class="text-xs muted">Vibration amplitude rising &amp; irregular · est. <b>~2 days</b> to attention · driver: drive-bearing wear</div>
+              </div>
+            </div>
+            <a class="k-btn k-btn-primary" href="maintenance.html"><span class="material-symbols-outlined" style="font-size:18px">cardiology</span>Open machine detail</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="k-proto"><span class="material-symbols-outlined" style="font-size:15px">draw</span>Prototype · live sample vitals</div>
+  <script src="assets/shell.js"></script>
+  <script>
+  // ---- machines ("organs") --------------------------------------------
+  const GREEN = "#2e7d32", AMBER = "#c26a00", RED = "#ba1a1a";
+  const MACHINES = [
+    { id:"furnace",  name:"Furnace 3",        status:"watch", risk:34, unit:"mm/s", base:2.4, sick:true,  note:"~2d to attention" },
+    { id:"cooling",  name:"Cooling Conveyor", status:"ok",    risk:4,  unit:"m/s",  base:1.2, sick:false, note:"steady" },
+    { id:"inspect",  name:"Inspection Stn",   status:"ok",    risk:6,  unit:"%",    base:2.1, sick:false, note:"steady" },
+    { id:"pkg",      name:"Packaging PKG-2",  status:"ok",    risk:3,  unit:"ppm",  base:0.8, sick:false, note:"steady" },
+    { id:"quench",   name:"Quench Tank",      status:"ok",    risk:8,  unit:"°C",   base:1.6, sick:false, note:"steady" },
+    { id:"anneal",   name:"Annealing Furnace",status:"ok",    risk:5,  unit:"mm/s", base:1.4, sick:false, note:"steady" },
+  ];
+  const colorOf = (s) => s==="crit"?RED:s==="watch"?AMBER:GREEN;
+  const fillOf  = (s) => s==="crit"?"rgba(186,26,26,.14)":s==="watch"?"rgba(194,106,0,.15)":"rgba(46,125,50,.14)";
+
+  // ---- canvas ECG engine ----------------------------------------------
+  // A scheduled-beat model: a heartbeat template is stamped into a scrolling
+  // buffer at each beat. Healthy machines beat on a steady interval with
+  // consistent amplitude; a "sick" machine jitters the interval, randomises
+  // amplitude, throws occasional premature beats and wanders its baseline —
+  // so an unhealthy trace reads as visibly irregular next to steady ones.
+  const TPL = [0,0,0,0, .08,.14,.08, 0,0, -.12, .9,1.0,-.35, 0, .10,.18,.22,.14,.06, 0,0,0,0,0,0,0,0,0];
+
+  function createECG(canvas, cfg) {
+    const ctx = canvas.getContext("2d");
+    let W=0, H=0, buf=[], pos=0, beatStart=-999, nextBeat=cfg.interval, ampF=1, drift=0, driftV=0;
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      W = canvas.clientWidth; H = canvas.clientHeight || 64;
+      canvas.width = W*dpr; canvas.height = H*dpr;
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      buf = new Array(Math.max(1,W)).fill(H/2);
+      pos=0; beatStart=-999; nextBeat=cfg.interval;
+    }
+    function sample(i) {
+      if (cfg.sick) { driftV += (Math.random()-.5)*.02; driftV*=.94; drift+=driftV; drift*=.998; drift=Math.max(-.09,Math.min(.09,drift)); }
+      // a gentle baseline sway so the line is never dead-flat — reads as "alive"
+      let v = drift + Math.sin(i*0.13)*0.035 + (Math.random()-.5)*cfg.noise;
+      if (i >= nextBeat) {
+        beatStart = i;
+        let jit = cfg.sick ? (0.55 + Math.random()*0.9) : (0.97 + Math.random()*0.06);
+        if (cfg.sick && Math.random() < 0.24) jit *= 0.42;           // premature beat
+        nextBeat = i + Math.round(cfg.interval * jit);
+        ampF = cfg.sick ? (0.45 + Math.random()*0.95) : (0.96 + Math.random()*0.08);
+      }
+      const rel = i - beatStart;
+      if (rel >= 0 && rel < TPL.length) v += TPL[rel]*ampF;
+      // clamp inside the canvas so tall spikes never clip at the edges
+      return Math.max(3, Math.min(H-3, H/2 - v*cfg.amp));
+    }
+    function step(px) { for (let k=0;k<px;k++){ buf.push(sample(pos)); buf.shift(); pos++; } }
+    function draw() {
+      ctx.clearRect(0,0,W,H);
+      // area under curve
+      ctx.beginPath(); ctx.moveTo(0,buf[0]);
+      for (let x=1;x<W;x++) ctx.lineTo(x,buf[x]);
+      ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath();
+      const g = ctx.createLinearGradient(0,0,0,H);
+      g.addColorStop(0, cfg.fill); g.addColorStop(1,"transparent");
+      ctx.fillStyle=g; ctx.fill();
+      // trace
+      ctx.beginPath(); ctx.moveTo(0,buf[0]);
+      for (let x=1;x<W;x++) ctx.lineTo(x,buf[x]);
+      ctx.lineWidth=cfg.master?2.6:2.3; ctx.lineJoin="round"; ctx.strokeStyle=cfg.color;
+      ctx.shadowColor=cfg.color; ctx.shadowBlur=6; ctx.stroke(); ctx.shadowBlur=0;
+      // live head
+      ctx.beginPath(); ctx.arc(W-1, buf[W-1], 2.6, 0, 7);
+      ctx.fillStyle=cfg.color; ctx.shadowColor=cfg.color; ctx.shadowBlur=10; ctx.fill(); ctx.shadowBlur=0;
+    }
+    resize();
+    return { resize, step, draw, cfg };
+  }
+
+  // ---- build organ cards ----------------------------------------------
+  const organsEl = document.getElementById("organs");
+  MACHINES.forEach((m) => {
+    const c = colorOf(m.status);
+    const badge = m.status==="watch" ? '<span class="k-badge k-badge-watch">Watch</span>'
+               : m.status==="crit"  ? '<span class="k-badge k-badge-crit">Critical</span>'
+               : '<span class="k-badge k-badge-ok">Steady</span>';
+    const el = document.createElement("div");
+    el.className = "k-card k-section organ" + (m.status==="watch"?" organ-watch":"");
+    el.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span class="live-dot" style="color:${c};background:${c}"></span>
+          <span class="font-bold text-sm">${m.name}</span>
+        </div>
+        ${badge}
+      </div>
+      <div class="ecg-wrap" style="height:78px"><canvas id="cv-${m.id}"></canvas></div>
+      <div class="flex items-center justify-between mt-2">
+        <div class="text-xs"><span class="faint uppercase font-bold">Now</span>
+          <span class="reading font-bold" id="rd-${m.id}" style="color:${c}"> ${m.base.toFixed(2)} ${m.unit}</span></div>
+        <div class="text-xs" style="color:${c}">
+          <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">${m.sick?"trending_up":"check_circle"}</span>
+          ${m.note} · risk ${m.risk}%
+        </div>
+      </div>`;
+    organsEl.appendChild(el);
+  });
+
+  // ---- instantiate monitors + run one global loop ---------------------
+  const monitors = [];
+  function initMonitors() {
+    monitors.length = 0;
+    // master aggregate pulse — the boldest strip, steady confident tempo
+    monitors.push(createECG(document.getElementById("master"),
+      { color:"#0f52ba", fill:"rgba(15,82,186,.13)", interval:135, amp:40, noise:.02, speed:2.2, sick:false, master:true }));
+    MACHINES.forEach((m) => {
+      const c = colorOf(m.status);
+      monitors.push(createECG(document.getElementById("cv-"+m.id),
+        { color:c, fill:fillOf(m.status), interval: m.sick?60:72, amp: m.sick?30:29, noise: m.sick?.06:.02, speed:2, sick:m.sick }));
+    });
+  }
+
+  let raf;
+  function loop() { monitors.forEach((mo)=>{ mo.step(mo.cfg.speed); mo.draw(); }); raf=requestAnimationFrame(loop); }
+
+  // ---- live ticking readings ------------------------------------------
+  function tickReadings() {
+    MACHINES.forEach((m) => {
+      const el = document.getElementById("rd-"+m.id);
+      if (!el) return;
+      let v;
+      if (m.sick) { m._t = (m._t||0) + 0.02; v = m.base + Math.sin(m._t)*0.25 + m._t*0.03 + Math.random()*0.12; }
+      else        { v = m.base + (Math.random()-.5)*0.15; }
+      el.textContent = " " + v.toFixed(2) + " " + m.unit;
+    });
+    // wander the master bpm a touch
+    const bpm = document.getElementById("bpm");
+    if (bpm) bpm.textContent = String(96 + Math.round(Math.sin(Date.now()/1500)*3));
+  }
+
+  window.addEventListener("load", () => {
+    initMonitors();
+    loop();
+    setInterval(tickReadings, 600);
+  });
+  let rz;
+  window.addEventListener("resize", () => { clearTimeout(rz); rz=setTimeout(()=>monitors.forEach(mo=>mo.resize()), 150); });
+  </script>
+</body>
+</html>

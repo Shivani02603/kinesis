@@ -7,10 +7,21 @@ HTTP or SQLite. The API layer persists what this returns.
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .data_assembly import assemble_forecasting_frame, load_labeled_table
 from .task_detection import build_file_catalog, detect_task
 from .training import train_forecasting, train_supervised
+
+if TYPE_CHECKING:
+    from scheduling_engine.solver import GraphMaintenanceContext
+
+
+class ObjectiveNotSupported(Exception):
+    """A clean, honest 'this objective can't be attempted with the current data'
+    verdict — NOT an error. Raised instead of a bare ValueError so the API layer
+    can mark the run 'not applicable' (a normal, expected outcome) rather than
+    'failed' (which reads as something broke). The message is still shown verbatim."""
 
 
 @dataclass
@@ -26,6 +37,8 @@ def run_training(
     upload_dir: Path,
     model_dir: Path,
     time_limit: int = 600,
+    settings: dict[str, str] | None = None,
+    graph_context: "GraphMaintenanceContext | None" = None,
 ) -> TrainingRunResult:
     catalogs = build_file_catalog(upload_dir)
     decision = detect_task(objective, supporting_signals, catalogs)
@@ -38,25 +51,21 @@ def run_training(
         # e.g. "inventory" asks about material replenishment, not sequencing jobs, even
         # though both may share an upload folder. Never silently substitute the wrong
         # deliverable just because the data happened to support computing something.
-        raise ValueError(
-            f"Task detection chose 'scheduling' for the '{objective}' objective, but scheduling "
-            "is only a valid answer for the scheduling objective itself — this looks like the "
-            "model reasoning from what the data supports rather than what was actually asked. "
-            f"Reasoning was: {decision.reasoning}"
+        raise ObjectiveNotSupported(
+            f"This objective can't be attempted with the current data: it doesn't ask for a "
+            f"production schedule, and the only thing the data supports here is scheduling. {decision.reasoning}"
         )
 
     if decision.task_type == "not_supportable":
-        # Surfaced as a failed run whose error text the user reads verbatim —
-        # an honest "cannot do this yet, upload X" instead of quietly training
-        # some other model the data happens to support.
-        raise ValueError(f"This objective is not supportable with the current data. {decision.reasoning}")
+        # A clean 'can't do this yet, upload X' — an honest verdict, not a crash.
+        raise ObjectiveNotSupported(f"This objective isn't supportable with the current data. {decision.reasoning}")
 
     if decision.task_type == "scheduling":
         # Not training at all — an exact CP-SAT optimization; imported lazily so the
         # predictive paths never pay for OR-Tools.
         from scheduling_engine.solver import run_scheduling
 
-        result, inputs_reasoning = run_scheduling(catalogs, upload_dir)
+        result, inputs_reasoning = run_scheduling(catalogs, upload_dir, settings, graph_context)
         return TrainingRunResult(
             task_type="scheduling",
             decision_reasoning=f"{decision.reasoning}\n\nInput identification: {inputs_reasoning}",
@@ -68,6 +77,11 @@ def run_training(
         result = train_supervised(
             table, decision.label_column, decision.label_kind, model_dir, time_limit=time_limit
         )
+        # Recorded so a later, separate step (on-demand order quoting) can
+        # reuse this already-verified label file/column instead of re-asking
+        # the same question — purely additive, nothing reads this dict
+        # expecting a fixed key set.
+        result["params"]["label_file"] = decision.label_file
     else:
         assembled = assemble_forecasting_frame(upload_dir, supporting_signals)
         result = train_forecasting(assembled, model_dir, time_limit=time_limit)

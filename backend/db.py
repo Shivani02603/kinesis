@@ -11,7 +11,7 @@ import json
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "app.db"
@@ -28,7 +28,9 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                industry TEXT,
+                machine_capacity INTEGER
             );
 
             CREATE TABLE IF NOT EXISTS review_items (
@@ -79,8 +81,63 @@ def init_db() -> None:
                 created_at TEXT NOT NULL,
                 finished_at TEXT
             );
+
+            -- role is one of 'super_admin' (platform-wide, project_id NULL) |
+            -- 'company_admin' | 'operational' (both tied to exactly one project_id —
+            -- this is the multi-tenant boundary, same project_id every other table
+            -- already scopes by).
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL,
+                project_id TEXT,
+                name TEXT,
+                job_title TEXT,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            );
+
+            -- One row per structure-change request a Company Admin raises; a Super
+            -- Admin resolves it (approved requests are actioned manually by re-running
+            -- the discovery pipeline — this table is the request/audit trail, not an
+            -- automated trigger).
+            CREATE TABLE IF NOT EXISTS structure_requests (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                requested_by TEXT NOT NULL,
+                description TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                resolved_at TEXT,
+                resolution_note TEXT,
+                attached_files TEXT,
+                pipeline_stage TEXT
+            );
             """
         )
+        # Migration for columns added after these tables already existed in
+        # production DBs — CREATE TABLE IF NOT EXISTS above is a no-op once the
+        # table exists, so new columns need an explicit ALTER.
+        existing_project_cols = {r["name"] for r in conn.execute("PRAGMA table_info(projects)").fetchall()}
+        if "industry" not in existing_project_cols:
+            conn.execute("ALTER TABLE projects ADD COLUMN industry TEXT")
+        if "machine_capacity" not in existing_project_cols:
+            conn.execute("ALTER TABLE projects ADD COLUMN machine_capacity INTEGER")
+        existing_user_cols = {r["name"] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "job_title" not in existing_user_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN job_title TEXT")
+        existing_req_cols = {r["name"] for r in conn.execute("PRAGMA table_info(structure_requests)").fetchall()}
+        if "attached_files" not in existing_req_cols:
+            conn.execute("ALTER TABLE structure_requests ADD COLUMN attached_files TEXT")
+        if "pipeline_stage" not in existing_req_cols:
+            conn.execute("ALTER TABLE structure_requests ADD COLUMN pipeline_stage TEXT")
 
 
 @contextmanager
@@ -96,14 +153,14 @@ def _connect():
 
 # ---- projects ----------------------------------------------------------
 
-def create_project(name: str) -> dict:
+def create_project(name: str, industry: str | None = None, machine_capacity: int | None = None) -> dict:
     project_id = str(uuid.uuid4())
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO projects (id, name, created_at) VALUES (?, ?, ?)",
-            (project_id, name, _now()),
+            "INSERT INTO projects (id, name, created_at, industry, machine_capacity) VALUES (?, ?, ?, ?, ?)",
+            (project_id, name, _now(), industry, machine_capacity),
         )
-    return {"id": project_id, "name": name}
+    return get_project(project_id)
 
 
 def list_projects() -> list[dict]:
@@ -116,6 +173,100 @@ def get_project(project_id: str) -> dict | None:
     with _connect() as conn:
         row = conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
     return dict(row) if row else None
+
+
+# ---- users & sessions ------------------------------------------------------
+
+def create_user(
+    email: str,
+    password_hash: str,
+    role: str,
+    project_id: str | None,
+    name: str | None = None,
+    job_title: str | None = None,
+) -> dict:
+    user_id = str(uuid.uuid4())
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO users (id, email, password_hash, role, project_id, name, job_title, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (user_id, email.strip().lower(), password_hash, role, project_id, name, job_title, _now()),
+        )
+    return get_user(user_id)
+
+
+def get_user(user_id: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def get_user_by_email(email: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE email = ?", (email.strip().lower(),)).fetchone()
+    return dict(row) if row else None
+
+
+def list_users(project_id: str | None = None) -> list[dict]:
+    with _connect() as conn:
+        if project_id is not None:
+            rows = conn.execute(
+                "SELECT * FROM users WHERE project_id = ? ORDER BY created_at", (project_id,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM users ORDER BY created_at").fetchall()
+    return [dict(r) for r in rows]
+
+
+def last_active_map(project_id: str) -> dict[str, str]:
+    """Most recent session created_at per user in this project — the real
+    signal behind "active this week", not a fabricated status."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT s.user_id AS user_id, MAX(s.created_at) AS last_active "
+            "FROM sessions s JOIN users u ON u.id = s.user_id "
+            "WHERE u.project_id = ? GROUP BY s.user_id",
+            (project_id,),
+        ).fetchall()
+    return {r["user_id"]: r["last_active"] for r in rows}
+
+
+def any_user_exists() -> bool:
+    with _connect() as conn:
+        row = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()
+    return row["c"] > 0
+
+
+def create_session(user_id: str, ttl_hours: int = 24 * 7) -> dict:
+    token = uuid.uuid4().hex + uuid.uuid4().hex  # 64 hex chars, unguessable
+    now = datetime.now(timezone.utc)
+    expires_at = (now + timedelta(hours=ttl_hours)).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+            (token, user_id, now.isoformat(), expires_at),
+        )
+    return {"token": token, "user_id": user_id, "expires_at": expires_at}
+
+
+def get_session_user(token: str) -> dict | None:
+    """Returns the user for a still-valid session token, or None if the token
+    is unknown or has expired — expired sessions are deleted here too, so
+    stale rows don't accumulate forever."""
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM sessions WHERE token = ?", (token,)).fetchone()
+        if row is None:
+            return None
+        if row["expires_at"] < _now():
+            conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+            return None
+        user_row = conn.execute("SELECT * FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+    return dict(user_row) if user_row else None
+
+
+def delete_session(token: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
 
 
 # ---- review items --------------------------------------------------------
@@ -386,6 +537,72 @@ def list_training_runs(project_id: str, objective: str | None = None) -> list[di
                 (project_id,),
             ).fetchall()
     return [_training_run_row_to_dict(r, include_result=False) for r in rows]
+
+
+# ---- structure-change requests ---------------------------------------------
+
+def _structure_request_row_to_dict(row) -> dict:
+    d = dict(row)
+    d["attached_files"] = json.loads(d["attached_files"]) if d.get("attached_files") else []
+    return d
+
+
+def create_structure_request(
+    project_id: str, requested_by: str, description: str, attached_files: list[str] | None = None
+) -> dict:
+    req_id = str(uuid.uuid4())
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO structure_requests (id, project_id, requested_by, description, status, created_at, attached_files) "
+            "VALUES (?, ?, ?, ?, 'pending', ?, ?)",
+            (req_id, project_id, requested_by, description, _now(), json.dumps(attached_files or [])),
+        )
+        row = conn.execute("SELECT * FROM structure_requests WHERE id = ?", (req_id,)).fetchone()
+    return _structure_request_row_to_dict(row)
+
+
+def get_structure_request(request_id: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM structure_requests WHERE id = ?", (request_id,)).fetchone()
+    return _structure_request_row_to_dict(row) if row else None
+
+
+def list_structure_requests(project_id: str | None = None) -> list[dict]:
+    with _connect() as conn:
+        if project_id is not None:
+            rows = conn.execute(
+                "SELECT * FROM structure_requests WHERE project_id = ? ORDER BY created_at DESC", (project_id,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM structure_requests ORDER BY created_at DESC").fetchall()
+    return [_structure_request_row_to_dict(r) for r in rows]
+
+
+def resolve_structure_request(request_id: str, status: str, resolution_note: str | None = None) -> dict | None:
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE structure_requests SET status = ?, resolved_at = ?, resolution_note = ? WHERE id = ?",
+            (status, _now(), resolution_note, request_id),
+        )
+        row = conn.execute("SELECT * FROM structure_requests WHERE id = ?", (request_id,)).fetchone()
+    return _structure_request_row_to_dict(row) if row else None
+
+
+def set_structure_request_stage(request_id: str, pipeline_stage: str, resolution_note: str | None = None) -> None:
+    """Progress marker for the approve → auto-pipeline flow: 'running' | 'needs_review'
+    | 'trained' | 'failed'. Separate from status (pending/approved/rejected) so the
+    approval decision and what the pipeline then did are each recorded honestly."""
+    with _connect() as conn:
+        if resolution_note is not None:
+            conn.execute(
+                "UPDATE structure_requests SET pipeline_stage = ?, resolution_note = ? WHERE id = ?",
+                (pipeline_stage, resolution_note, request_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE structure_requests SET pipeline_stage = ? WHERE id = ?",
+                (pipeline_stage, request_id),
+            )
 
 
 def get_training_run(run_id: str) -> dict | None:

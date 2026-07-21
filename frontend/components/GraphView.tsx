@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
+  useReactFlow,
+  useNodesInitialized,
   type Node,
   type Edge,
   MarkerType,
@@ -129,6 +131,7 @@ export function GraphView({ graph }: { graph: GraphData }) {
       proOptions={{ hideAttribution: true }}
       minZoom={0.1}
     >
+      <FitViewOnGraphChange nodeCount={nodes.length} edgeCount={edges.length} />
       <Background color="#d3e4fe" gap={20} />
       <Controls showInteractive={false} />
       <MiniMap
@@ -139,4 +142,22 @@ export function GraphView({ graph }: { graph: GraphData }) {
       />
     </ReactFlow>
   );
+}
+
+// `fitView` on <ReactFlow> only auto-fits once, on mount. This component lives INSIDE
+// <ReactFlow> (so the hooks have the flow context) and re-fits the camera every time the
+// node/edge count actually changes — needed for the live discovery run, where the graph is
+// re-fetched every second and grows: without this the camera stays framed on the first few
+// nodes and everything discovered afterwards sits off-screen. Waiting for nodesInitialized
+// ensures dagre has measured real node sizes before fitting, so the fit isn't computed
+// against zero-size placeholders (which was leaving the graph blank/off-screen).
+function FitViewOnGraphChange({ nodeCount, edgeCount }: { nodeCount: number; edgeCount: number }) {
+  const { fitView } = useReactFlow();
+  const initialized = useNodesInitialized();
+  useEffect(() => {
+    if (initialized && nodeCount > 0) {
+      fitView({ padding: 0.15, duration: 300 });
+    }
+  }, [initialized, nodeCount, edgeCount, fitView]);
+  return null;
 }

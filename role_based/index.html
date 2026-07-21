@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kinesis — Role-based prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+  <div class="k-content" style="max-width:1080px; margin:0 auto; padding-top:3rem;">
+
+    <div class="flex items-center gap-3 mb-2">
+      <div class="k-brand-mark" style="width:2.5rem;height:2.5rem;border-radius:.6rem">
+        <span class="material-symbols-outlined fill" style="font-size:22px">bolt</span>
+      </div>
+      <div>
+        <div style="font-size:1.4rem;font-weight:800;color:var(--accent)">Kinesis</div>
+        <div class="text-xs faint uppercase">Role-based access · interactive prototype</div>
+      </div>
+    </div>
+    <p class="muted text-sm mb-4" style="max-width:60ch">
+      Pick a persona to step into, or start at the front door. Every screen is clickable and cross-linked —
+      use the <b>“Viewing as”</b> switcher in any top bar to hop between tiers the way a real signed-in user
+      never could, so the whole thing is easy to walk through in one sitting.
+    </p>
+    <a class="k-btn k-btn-primary mb-6" href="login.html"><span class="material-symbols-outlined" style="font-size:18px">login</span>Start at the login screen</a>
+
+    <!-- hero: living monitor -->
+    <div class="k-tier-label" style="padding-left:0">★ Signature view · the plant, alive</div>
+    <a class="k-card p-5 mb-5" href="vitals.html" style="text-decoration:none;color:inherit;display:block;border:1.5px solid var(--accent)">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="icon-tile" style="background:var(--accent);color:#fff"><span class="material-symbols-outlined fill">monitor_heart</span></span>
+        <div><div class="font-bold">Plant Vital-Signs monitor <span class="k-badge k-badge-info" style="margin-left:.3rem">live · animated</span></div>
+          <div class="text-xs faint">The whole factory as one living body — every machine has a pulse</div></div>
+      </div>
+      <p class="text-xs muted">Real scrolling ECG traces, one per machine. Healthy machines beat steadily; a failing one’s
+        rhythm visibly drifts and turns irregular — you <i>see</i> which machine is sick before it stops.</p>
+    </a>
+
+    <!-- live run moments -->
+    <div class="k-tier-label" style="padding-left:0">Live moments · what a run looks like</div>
+    <div class="grid cols-2 gap-4 mb-5">
+      <a class="k-card p-5" href="run-discovery.html" style="text-decoration:none;color:inherit;display:block;border:1px solid var(--accent)">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="icon-tile" style="background:var(--accent);color:#fff"><span class="material-symbols-outlined">graph_3</span></span>
+          <div><div class="font-bold">Discovery running <span class="k-badge k-badge-info" style="margin-left:.3rem">animated</span></div>
+            <div class="text-xs faint">Watch the process map build itself</div></div>
+        </div>
+        <p class="text-xs muted">Staged pipeline, a streaming activity log, and the graph assembling node-by-node as entities are found.</p>
+      </a>
+      <a class="k-card p-5" href="run-training.html" style="text-decoration:none;color:inherit;display:block;border:1px solid var(--accent)">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="icon-tile" style="background:var(--accent);color:#fff"><span class="material-symbols-outlined">model_training</span></span>
+          <div><div class="font-bold">Training running <span class="k-badge k-badge-info" style="margin-left:.3rem">animated</span></div>
+            <div class="text-xs faint">Watch models compete on a live leaderboard</div></div>
+        </div>
+        <p class="text-xs muted">Per-objective progress, streaming “why this technique” reasoning, and a leaderboard that fills row-by-row.</p>
+      </a>
+    </div>
+
+    <!-- Tier 1 -->
+    <div class="k-tier-label" style="padding-left:0">Tier 1 · Platform (our company)</div>
+    <div class="grid cols-2 gap-4 mb-5">
+      <a class="k-card p-5" href="super-admin.html" style="text-decoration:none;color:inherit;display:block">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="icon-tile" style="background:var(--accent-soft);color:var(--accent-hover)"><span class="material-symbols-outlined">shield_person</span></span>
+          <div>
+            <div class="font-bold">Super Admin</div>
+            <div class="text-xs faint">Kinesis platform owner</div>
+          </div>
+        </div>
+        <p class="text-xs muted">Sees every client company on the platform. Owns onboarding &amp; the
+          Understanding-Engine training flow. Approves structure-change requests and gates new machines.</p>
+      </a>
+      <div class="k-card p-5" style="background:var(--surface-2)">
+        <div class="text-xs uppercase faint font-bold mb-2">What “structure” means</div>
+        <p class="text-xs muted">Adding machines / sensors, re-training the process graph — the rare,
+          high-impact changes. Kept at Tier 1 for both <b>billing scope</b> (a client pays for N machines)
+          and <b>graph correctness</b> (merge/gap calls need real judgment).</p>
+      </div>
+    </div>
+
+    <!-- Tier 2 -->
+    <div class="k-tier-label" style="padding-left:0">Tier 2 · Company (one client)</div>
+    <div class="grid cols-2 gap-4 mb-5">
+      <a class="k-card p-5" href="admin.html" style="text-decoration:none;color:inherit;display:block">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="icon-tile" style="background:var(--info-soft);color:var(--info)"><span class="material-symbols-outlined">admin_panel_settings</span></span>
+          <div>
+            <div class="font-bold">Company Admin</div>
+            <div class="text-xs faint">Acme Steel Plant</div>
+          </div>
+        </div>
+        <p class="text-xs muted">Read-only process map. Manages the live data connections (sensors, ERP,
+          CMMS, LIMS — connected or manual) and this company’s people &amp; roles. Can <b>request</b> a
+          structure change; can’t make one.</p>
+      </a>
+      <a class="k-card p-5" href="admin-connections.html" style="text-decoration:none;color:inherit;display:block">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="icon-tile" style="background:var(--success-soft);color:var(--success)"><span class="material-symbols-outlined">cable</span></span>
+          <div>
+            <div class="font-bold">Data connections</div>
+            <div class="text-xs faint">Routine data — no re-training</div>
+          </div>
+        </div>
+        <p class="text-xs muted">The “API, not re-upload drama” layer: once trained, sensors/ERP stay
+          connected and stream in; where a client has no system, a role’s daily work becomes the data entry.</p>
+      </a>
+    </div>
+
+    <!-- Tier 3 -->
+    <div class="k-tier-label" style="padding-left:0">Tier 3 · Operational (one dashboard, same for everyone in the company)</div>
+    <a class="k-card p-5" href="plant-head.html" style="text-decoration:none;color:inherit;display:block">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="icon-tile" style="background:var(--accent);color:#fff"><span class="material-symbols-outlined">dashboard</span></span>
+        <div>
+          <div class="font-bold">Operational dashboard</div>
+          <div class="text-xs faint">Not split into many role apps — one unified operational layer</div>
+        </div>
+      </div>
+      <p class="text-xs muted mb-3">Every operational user in the company opens the <b>same</b> dashboard, with all
+        areas in one place — kept deliberately simple, not fragmented per role.</p>
+      <div class="flex flex-wrap gap-2 text-xs">
+        <span class="k-badge k-badge-neutral">Overview</span>
+        <a class="k-badge k-badge-info" href="vitals.html" style="text-decoration:none">★ Plant Vitals</a>
+        <a class="k-badge k-badge-neutral" href="maintenance.html" style="text-decoration:none">Machine Health</a>
+        <span class="k-badge k-badge-neutral">Quality</span>
+        <span class="k-badge k-badge-neutral">Demand</span>
+        <a class="k-badge k-badge-neutral" href="sales.html" style="text-decoration:none">Deliveries</a>
+        <span class="k-badge k-badge-neutral">Materials</span>
+        <span class="k-badge k-badge-neutral">Production Plan</span>
+      </div>
+    </a>
+  </div>
+
+  <div class="k-proto"><span class="material-symbols-outlined" style="font-size:15px">draw</span>Prototype · sample data for layout</div>
+</body>
+</html>

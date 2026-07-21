@@ -144,6 +144,8 @@ body {
 .badge-confirmed { background: var(--success-soft); color: var(--success); }
 .badge-rejected { background: var(--danger-soft); color: var(--danger); }
 .badge-needs_fix { background: var(--info-soft); color: var(--info); }
+.badge-info { background: var(--info-soft); color: var(--info); }
+.badge-neutral { background: var(--surface-2); color: var(--text-muted); }
 
 .scrollbar-thin::-webkit-scrollbar {
   width: 8px;
