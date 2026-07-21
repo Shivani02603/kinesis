@@ -165,6 +165,9 @@ export type TrainingResult = {
   eval_metric?: string;
   leaderboard?: LeaderboardEntry[];
   why_model_won?: string | null;
+  // Real component weights of a winning WeightedEnsemble, from AutoGluon itself.
+  // Absent/null when the winner isn't an ensemble — never a guessed breakdown.
+  ensemble_composition?: { model: string; weight: number }[] | null;
   series?: ForecastSeries[];
   feature_importance?: { feature: string; importance: number }[];
   // scheduling payload

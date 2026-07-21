@@ -44,37 +44,90 @@ def _leaderboard_records(leaderboard: pd.DataFrame) -> list[dict]:
                 "predict_time": _round(row.get("pred_time_val"), 2),
             }
         )
+    # AutoGluon doesn't always hand back the leaderboard best-first (observed: the
+    # worst model sitting at row 1), which made the numbered "#" column meaningless
+    # and the winner appear near the bottom. Sort best-first ourselves — higher
+    # score_val is always better in AutoGluon — so rank 1 really is the best, and a
+    # "runner-up" is genuinely the second-best. Unscored models (None) go last.
+    records.sort(key=lambda r: (r["score_val"] is None, -(r["score_val"] or 0)))
     return records
 
 
 def _why_model_won(leaderboard_records: list[dict], best_model: str) -> str | None:
-    """A sentence built only from the real leaderboard numbers above — never an
-    invented explanation of a model's internals. If AutoGluon didn't report a
-    comparable runner-up (only one model, or missing scores), this is None and
-    the UI shows nothing rather than a hollow sentence."""
+    """A sentence built only from the real leaderboard numbers — never an invented
+    explanation. AutoGluon orients score_val so HIGHER is always better (it negates
+    error metrics), so we can say that plainly without knowing the metric. Fit time
+    is deliberately left out of the reason: a model doesn't win for being fast or
+    slow, only for being more accurate — mentioning speed here (the old "X% longer
+    to fit") read as if it mattered to the choice, which it doesn't."""
     scored = [r for r in leaderboard_records if r["score_val"] is not None]
     winner = next((r for r in scored if r["model"] == best_model), None)
     if winner is None:
         return None
-    runner_up = next((r for r in scored if r["model"] != best_model), None)
-    if runner_up is None:
-        return None
+    others = [r for r in scored if r["model"] != best_model]
+    if not others:
+        return f"{winner['model']} was the only model that could be scored, so it was kept."
 
-    parts = [
-        f"{winner['model']} had the best validation score "
-        f"({winner['score_val']} vs {runner_up['model']}'s {runner_up['score_val']})"
-    ]
-    wt, rt = winner.get("fit_time"), runner_up.get("fit_time")
-    if wt is not None and rt is not None and rt > 0 and wt != rt:
-        if wt < rt:
-            pct = round((1 - wt / rt) * 100)
-            if pct > 0:
-                parts.append(f"and fit {pct}% faster")
-        else:
-            pct = round((wt / rt - 1) * 100)
-            if pct > 0:
-                parts.append(f"though it took {pct}% longer to fit")
-    return " ".join(parts) + "."
+    # The runner-up is the best-scoring OTHER model — computed directly, never
+    # assumed from list order (AutoGluon's row order can't be trusted, which is
+    # exactly what made an earlier version compare against the worst model).
+    runner_up = max(others, key=lambda r: r["score_val"])
+    w, r = winner["score_val"], runner_up["score_val"]
+    if round(w, 4) == round(r, 4):
+        # A genuine tie at the shown precision — never phrase it as "X vs X", which
+        # reads broken; say they matched and this one was ranked on top.
+        return (
+            f"{winner['model']} was ranked top, matching {runner_up['model']} on accuracy "
+            f"(both about {w} on unseen validation data — higher is better)."
+        )
+    return (
+        f"{winner['model']} was the most accurate on unseen validation data "
+        f"({w} vs {runner_up['model']}'s {r} — higher is better)."
+    )
+
+
+def _ensemble_composition_ts(predictor, best_model: str) -> list[dict] | None:
+    """The real component weights of a winning time-series WeightedEnsemble, read
+    from AutoGluon's own fitted ensemble object. Best-effort by design: if the
+    winner isn't an ensemble, or this AutoGluon version stores the weights
+    differently, it returns None and the UI shows nothing — it never guesses a
+    breakdown. Every number here is AutoGluon's, not ours."""
+    if "Ensemble" not in best_model:
+        return None
+    try:
+        model = predictor._learner.load_trainer().load_model(best_model)  # noqa: SLF001
+        weights = getattr(model, "model_to_weight", None)
+        if isinstance(weights, dict) and weights:
+            pairs = [
+                {"model": name, "weight": round(float(w), 4)}
+                for name, w in weights.items()
+                if w and float(w) > 0
+            ]
+            return sorted(pairs, key=lambda p: -p["weight"]) or None
+    except Exception:  # noqa: BLE001 — an internal-API mismatch must degrade to "no breakdown"
+        return None
+    return None
+
+
+def _ensemble_composition_tabular(predictor, best_model: str) -> list[dict] | None:
+    """Same best-effort extraction for a tabular WeightedEnsemble."""
+    if "Ensemble" not in best_model:
+        return None
+    try:
+        model = predictor._trainer.load_model(best_model)  # noqa: SLF001
+        inner = getattr(model, "model", model)
+        weights = getattr(inner, "weights_", None)
+        base = getattr(model, "base_model_names", None) or getattr(inner, "base_model_names", None)
+        if weights is not None and base is not None and len(weights) == len(base):
+            pairs = [
+                {"model": b, "weight": round(float(w), 4)}
+                for b, w in zip(base, weights)
+                if w and float(w) > 0
+            ]
+            return sorted(pairs, key=lambda p: -p["weight"]) or None
+    except Exception:  # noqa: BLE001
+        return None
+    return None
 
 
 def _dominant_freq(frame: "pd.DataFrame"):
@@ -170,6 +223,7 @@ def train_forecasting(
         "eval_metric": "WQL, shown negated per AutoGluon convention — closer to 0 is better, 0 is perfect",
         "leaderboard": leaderboard_records,
         "why_model_won": _why_model_won(leaderboard_records, predictor.model_best),
+        "ensemble_composition": _ensemble_composition_ts(predictor, predictor.model_best),
         "series": series_payload,
         "params": {
             "prediction_length": prediction_length,
@@ -243,6 +297,7 @@ def train_supervised(
         "eval_metric": str(predictor.eval_metric),
         "leaderboard": leaderboard_records,
         "why_model_won": _why_model_won(leaderboard_records, predictor.model_best),
+        "ensemble_composition": _ensemble_composition_tabular(predictor, predictor.model_best),
         "feature_importance": [
             {"feature": feature, "importance": _round(row["importance"])}
             for feature, row in importance.iterrows()
