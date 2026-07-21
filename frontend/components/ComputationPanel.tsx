@@ -31,15 +31,6 @@ const STATUS_BADGES: Record<TrainingRun["status"], { label: string; cls: string 
   unsupported: { label: "not applicable", cls: "badge-neutral" },
 };
 
-const TASK_TYPE_EXPLANATIONS: Record<string, string> = {
-  forecasting:
-    "No recorded outcome events relevant to this objective were found in the uploaded data, so the system models each relevant signal's own behavior over time. The shaded band is the normal range learned from its own history — readings outside it indicate a deviation from past behavior.",
-  supervised:
-    "Recorded outcome labels relevant to this objective were found in the uploaded data, so the system trained a supervised model to predict them directly.",
-  scheduling:
-    "This objective is a planning decision, not a prediction — so instead of training a model, the system solved for the schedule exactly with a constraint solver (OR-Tools CP-SAT), minimizing lateness against due dates first and total duration second.",
-};
-
 const GANTT_COLORS = ["#a85a2b", "#5b7c99", "#7c9c6b", "#9c6b8f", "#b0893c", "#6b9c95"];
 
 function ScheduleView({ result }: { result: TrainingResult }) {
@@ -285,27 +276,17 @@ function parseReasoning(text: string): { intro: string; items: string[] } {
   return { intro: text, items: [] };
 }
 
-function CollapsibleReasoning({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
+// The raw model reasoning, rendered as clean bullets. Shown inside the collapsed
+// "technical detail" section, so it never collapses again on its own.
+function ReasoningBullets({ text }: { text: string }) {
   const { intro, items } = parseReasoning(text);
-  const isLong = text.length > 220;
-
-  if (!isLong) {
-    return (
-      <p className="text-xs text-[var(--text-muted)]">
-        <span className="font-medium text-[var(--text)]">Reasoning: </span>
-        {text}
-      </p>
-    );
-  }
-
   return (
     <div className="text-xs">
       <p className="text-[var(--text-muted)]">
-        <span className="font-medium text-[var(--text)]">Reasoning: </span>
-        {open ? intro : (intro || text).slice(0, 200).trimEnd() + "…"}
+        <span className="font-medium text-[var(--text)]">Full reasoning: </span>
+        {intro}
       </p>
-      {open && items.length > 0 && (
+      {items.length > 0 && (
         <ul className="mt-2 space-y-1.5">
           {items.map((item, i) => (
             <li key={i} className="flex gap-2 text-[var(--text-muted)]">
@@ -315,9 +296,110 @@ function CollapsibleReasoning({ text }: { text: string }) {
           ))}
         </ul>
       )}
-      <button onClick={() => setOpen((v) => !v)} className="text-[var(--accent)] font-semibold mt-2 hover:underline">
-        {open ? "Show less" : "Show full reasoning"}
-      </button>
+    </div>
+  );
+}
+
+// Plain-language name for the approach — what a non-technical reader should see
+// first, instead of the bare "forecasting" / "supervised" label.
+const APPROACH_HEADLINE: Record<string, string> = {
+  forecasting: "Forecasting — watching each signal's own pattern",
+  supervised: "Supervised learning — predicting a known outcome",
+  scheduling: "Exact scheduling — planning, not prediction",
+};
+
+// A readable explanation built ONLY from real facts already in the run (the task
+// type, the actual signals modeled, the real label/features) — nothing invented,
+// just phrased for a person instead of an engineer.
+function plainSummary(result: TrainingResult): string {
+  if (result.task_type === "forecasting") {
+    const names = (result.series ?? []).map((s) => s.item_id);
+    const list =
+      names.length === 0
+        ? "each monitored signal"
+        : names.slice(0, 4).join(", ") + (names.length > 4 ? `, and ${names.length - 4} more` : "");
+    return (
+      `We track ${list} over time and learn what "normal" looks like for each, then flag any reading that ` +
+      `drifts outside its own normal range. There's no record of past outcomes to predict directly, so instead ` +
+      `of guessing failures we model each signal's own behaviour and catch the drift early.`
+    );
+  }
+  if (result.task_type === "supervised") {
+    const label = (result.params?.label_column as string) || "the outcome";
+    const feats = (result.feature_importance ?? []).slice(0, 3).map((f) => f.feature);
+    const driver = feats.length ? ` The strongest drivers were ${feats.join(", ")}.` : "";
+    return (
+      `We learned from past records where ${label} was already known and built a model to predict it for new ` +
+      `cases — because that outcome IS recorded in the data, we can learn it directly.${driver}`
+    );
+  }
+  return (
+    `Instead of training a model, we solved the plan exactly with a constraint solver — sequencing every order ` +
+    `across the machines to hit due dates first and keep the total time short. It's a planning decision, not a prediction.`
+  );
+}
+
+// Turn the raw params into a few plain sentences a non-technical reader gets;
+// anything without a friendly mapping just isn't shown in the plain view (it's
+// still in the technical params grid below).
+function readableParams(result: TrainingResult): string[] {
+  const p = result.params ?? {};
+  const out: string[] = [];
+  const num = (v: unknown) => (typeof v === "number" ? v : Number(v));
+  if (p.prediction_length != null) out.push(`Forecasts ${num(p.prediction_length)} steps ahead.`);
+  if (p.shortest_series_length != null) out.push(`Learned from ${num(p.shortest_series_length)} readings of history.`);
+  if (p.training_rows != null) out.push(`Learned from ${num(p.training_rows)} completed records.`);
+  if (p.time_limit_seconds != null) out.push(`Trained for up to ${Math.round(num(p.time_limit_seconds) / 60)} min.`);
+  return out;
+}
+
+function WhyTechnique({ run }: { run: TrainingRun }) {
+  const result = run.result;
+  const [open, setOpen] = useState(false);
+  if (!result) return null;
+  const plainParams = readableParams(result);
+  const hasTechnical = Boolean(run.decision_reasoning) || Object.keys(result.params ?? {}).length > 0;
+
+  return (
+    <div className="card p-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Why this technique</h3>
+        <span className="badge">{result.task_type}</span>
+      </div>
+      <p className="text-sm font-semibold text-[var(--text)]">
+        {APPROACH_HEADLINE[result.task_type] ?? result.task_type}
+      </p>
+      <p className="text-xs text-[var(--text-muted)]">{plainSummary(result)}</p>
+      {plainParams.length > 0 && (
+        <ul className="text-xs text-[var(--text-faint)] space-y-0.5 pt-1">
+          {plainParams.map((line) => (
+            <li key={line} className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[14px]">check_small</span>
+              {line}
+            </li>
+          ))}
+        </ul>
+      )}
+      {hasTechnical && (
+        <div className="pt-1">
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="text-[var(--accent)] text-xs font-semibold hover:underline"
+          >
+            {open ? "Hide technical detail" : "Show technical detail"}
+          </button>
+          {open && (
+            <div className="mt-2 space-y-3">
+              {run.decision_reasoning && <ReasoningBullets text={run.decision_reasoning} />}
+              {Object.keys(result.params ?? {}).length > 0 && (
+                <div className="pt-2 border-t border-[var(--border)]">
+                  <ParamsGrid params={result.params} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -360,17 +442,7 @@ function ObjectiveDetail({ run }: { run: TrainingRun }) {
 
   return (
     <div className="space-y-4">
-      <div className="card p-4 space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Why this technique</h3>
-          <span className="badge">{result.task_type}</span>
-        </div>
-        <p className="text-xs text-[var(--text-muted)]">{TASK_TYPE_EXPLANATIONS[result.task_type]}</p>
-        {run.decision_reasoning && <CollapsibleReasoning text={run.decision_reasoning} />}
-        <div className="pt-2 border-t border-[var(--border)]">
-          <ParamsGrid params={result.params} />
-        </div>
-      </div>
+      <WhyTechnique run={run} />
 
       {result.why_model_won && (
         <div className="card p-4 space-y-1.5" style={{ background: "var(--success-soft)", borderColor: "var(--success)" }}>

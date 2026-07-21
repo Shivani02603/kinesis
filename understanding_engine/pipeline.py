@@ -44,8 +44,8 @@ def _namespace_ids(entities: list[Entity], relationships: list[Relationship], so
     The LLM invents ids independently per call and has no visibility into ids
     from other sources — two unrelated entities in different files can easily
     slugify to the same string (both call it "fce-03-temp"). Without this,
-    Neo4j's MERGE-by-id would silently collapse them into one node, bypassing
-    entity resolution's similarity check entirely — the merge queue and
+    the graph store's upsert-by-id would silently collapse them into one node,
+    bypassing entity resolution's similarity check entirely — the merge queue and
     threshold would never even see it happen. Resolution is the only place
     ids are allowed to converge, via its explicit id_map.
     """

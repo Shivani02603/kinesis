@@ -111,13 +111,7 @@ def find_maintenance_windows(
     if not series_by_signal:
         return {}
 
-    rows = store.run(
-        "MATCH (a:Asset {project_id: $project_id}) "
-        "OPTIONAL MATCH (s:Signal {project_id: $project_id})-[:MEASURES]->(a) "
-        "RETURN a.name AS asset_name, collect(s.name) AS signal_names",
-        project_id=project_id,
-    )
-    signals_by_asset = {r["asset_name"]: [n for n in r["signal_names"] if n] for r in rows if r.get("asset_name")}
+    signals_by_asset = store.signals_by_asset(project_id)
     if not signals_by_asset:
         return {}
 
