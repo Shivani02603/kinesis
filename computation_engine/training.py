@@ -47,6 +47,58 @@ def _leaderboard_records(leaderboard: pd.DataFrame) -> list[dict]:
     return records
 
 
+def _why_model_won(leaderboard_records: list[dict], best_model: str) -> str | None:
+    """A sentence built only from the real leaderboard numbers above — never an
+    invented explanation of a model's internals. If AutoGluon didn't report a
+    comparable runner-up (only one model, or missing scores), this is None and
+    the UI shows nothing rather than a hollow sentence."""
+    scored = [r for r in leaderboard_records if r["score_val"] is not None]
+    winner = next((r for r in scored if r["model"] == best_model), None)
+    if winner is None:
+        return None
+    runner_up = next((r for r in scored if r["model"] != best_model), None)
+    if runner_up is None:
+        return None
+
+    parts = [
+        f"{winner['model']} had the best validation score "
+        f"({winner['score_val']} vs {runner_up['model']}'s {runner_up['score_val']})"
+    ]
+    wt, rt = winner.get("fit_time"), runner_up.get("fit_time")
+    if wt is not None and rt is not None and rt > 0 and wt != rt:
+        if wt < rt:
+            pct = round((1 - wt / rt) * 100)
+            if pct > 0:
+                parts.append(f"and fit {pct}% faster")
+        else:
+            pct = round((wt / rt - 1) * 100)
+            if pct > 0:
+                parts.append(f"though it took {pct}% longer to fit")
+    return " ".join(parts) + "."
+
+
+def _dominant_freq(frame: "pd.DataFrame"):
+    """The single most common gap between consecutive readings, as a pandas
+    offset. AutoGluon needs a fixed cadence to fit a time-series model; the
+    upstream regularity check only guarantees ~80% of gaps match, and appending
+    live data after a break (history ends, then new rows resume) can leave a hole
+    that makes AutoGluon's own stricter inference give up with 'frequency cannot
+    be inferred'. Declaring the cadence ourselves and snapping to it fixes that."""
+    gaps: list = []
+    for _, g in frame.groupby("item_id"):
+        ts = pd.Series(sorted(pd.to_datetime(g["timestamp"]).unique()))
+        gaps.extend(ts.diff().dropna().tolist())
+    if not gaps:
+        return None
+    modal = pd.Series(gaps).mode()
+    if modal.empty:
+        return None
+    try:
+        return pd.tseries.frequencies.to_offset(modal.iloc[0])
+    except (ValueError, TypeError):
+        return None
+
+
 def train_forecasting(
     assembled: AssembledData,
     model_dir: Path,
@@ -63,16 +115,29 @@ def train_forecasting(
     ts_data = TimeSeriesDataFrame.from_data_frame(
         frame, id_column="item_id", timestamp_column="timestamp"
     )
+    # Snap every series onto one fixed cadence before fitting. convert_frequency
+    # reindexes to a regular grid (gaps become NaN, which AutoGluon then imputes
+    # with its own documented method) — so a hole from newly-appended live data no
+    # longer breaks frequency inference. Guarded so an API/edge difference degrades
+    # to the previous behaviour instead of failing worse.
+    freq = _dominant_freq(frame)
+    if freq is not None:
+        try:
+            ts_data = ts_data.convert_frequency(freq)
+        except Exception:  # noqa: BLE001 — fall back to letting AutoGluon infer
+            pass
 
     predictor = TimeSeriesPredictor(
         path=str(model_dir),
         prediction_length=prediction_length,
         quantile_levels=_QUANTILES,
         eval_metric="WQL",
+        freq=freq.freqstr if freq is not None else None,
     )
     predictor.fit(ts_data, presets="medium_quality", time_limit=time_limit)
 
     leaderboard = predictor.leaderboard(ts_data)
+    leaderboard_records = _leaderboard_records(leaderboard)
     predictions = predictor.predict(ts_data)
 
     series_payload = []
@@ -103,7 +168,8 @@ def train_forecasting(
         "task_type": "forecasting",
         "best_model": predictor.model_best,
         "eval_metric": "WQL, shown negated per AutoGluon convention — closer to 0 is better, 0 is perfect",
-        "leaderboard": _leaderboard_records(leaderboard),
+        "leaderboard": leaderboard_records,
+        "why_model_won": _why_model_won(leaderboard_records, predictor.model_best),
         "series": series_payload,
         "params": {
             "prediction_length": prediction_length,
@@ -159,6 +225,7 @@ def train_supervised(
     predictor.fit(train_table, presets="medium_quality", time_limit=time_limit)
 
     leaderboard = predictor.leaderboard()
+    leaderboard_records = _leaderboard_records(leaderboard)
     importance = predictor.feature_importance(train_table)
 
     pending_predictions = []
@@ -174,7 +241,8 @@ def train_supervised(
         "task_type": "supervised",
         "best_model": predictor.model_best,
         "eval_metric": str(predictor.eval_metric),
-        "leaderboard": _leaderboard_records(leaderboard),
+        "leaderboard": leaderboard_records,
+        "why_model_won": _why_model_won(leaderboard_records, predictor.model_best),
         "feature_importance": [
             {"feature": feature, "importance": _round(row["importance"])}
             for feature, row in importance.iterrows()

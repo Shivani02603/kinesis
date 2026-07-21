@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
-import { api, OBJECTIVES, type DashboardCard, type DeliveryOrderRow, type ForecastSeries, type GraphData } from "@/lib/api";
-import { ForecastChart } from "./ForecastChart";
+import { api, OBJECTIVES, type DashboardCard, type DeliveryOrderRow, type ForecastSeries, type GraphData, type QuoteModelStatus, type QuoteResult } from "@/lib/api";
+import { ForecastChart, type NormalBand } from "./ForecastChart";
 
 // Every number rendered by this dashboard is either read directly from a
 // card's `data` payload (computed by the backend from real training runs) or
@@ -96,7 +96,9 @@ type HistoricalOnTime = { overall_rate: number; overall_n: number; recent_rate?:
 type ScheduleTaskRow = { machine: string; start: string; end: string; start_h: number; end_h: number };
 type ScheduleOrderRow = {
   order_id: string; quantity: number; due_date: string; completion: string;
-  hours_late: number; on_time: boolean; tasks: ScheduleTaskRow[];
+  hours_late: number; on_time: boolean; priority?: string | null; priority_weight?: number;
+  product?: string | null;
+  tasks: ScheduleTaskRow[];
 };
 
 function deviationItems(card: DashboardCard | undefined): DeviationItem[] {
@@ -304,14 +306,23 @@ function PendingOrError({ card }: { card: DashboardCard }) {
   );
 }
 
-function SeriesCard({ series, title, caption }: { series: ForecastSeries; title?: string; caption: string }) {
+function SeriesCard({
+  series, title, caption, normal,
+}: { series: ForecastSeries; title?: string; caption: string; normal?: NormalBand }) {
   return (
     <div className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-5">
       <h3 className="text-sm font-bold text-[var(--text)] mb-1">{title ?? series.item_id}</h3>
-      <ForecastChart series={series} />
+      <ForecastChart series={series} normal={normal} />
       <p className="text-xs text-[var(--text-muted)] mt-2">{caption}</p>
     </div>
   );
+}
+
+// The learned normal range the backend already computed for this exact signal —
+// looked up by item_id so a chart never borrows another signal's band.
+function normalFor(items: DeviationItem[], itemId: string | undefined): NormalBand | undefined {
+  const match = items.find((i) => i.item_id === itemId);
+  return match ? { lo: match.lo, hi: match.hi } : undefined;
 }
 
 // A donut for a genuine categorical split the backend actually computed
@@ -473,8 +484,9 @@ function MachineHealthPage({ card, graph }: { card: DashboardCard; graph: GraphD
         {flagged && (
           <SeriesCard
             series={flagged}
+            normal={normalFor(items, flagged.item_id)}
             title={`${flagged.item_id} — trend`}
-            caption="Solid: recorded readings. Dashed: forecast. Shaded band: learned normal range — readings outside it are a real deviation, not a guess."
+            caption="Solid: recorded readings. Dashed: forecast. Green dashed lines: this signal's own learned normal range — readings outside them are a real deviation, not a guess."
           />
         )}
       </div>
@@ -486,7 +498,12 @@ function MachineHealthPage({ card, graph }: { card: DashboardCard; graph: GraphD
       {graph && <MachineCoverage graph={graph} monitoredNames={series.map((s) => s.item_id)} />}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
         {series.filter((s) => s.item_id !== flagged?.item_id).map((s) => (
-          <SeriesCard key={s.item_id} series={s} caption="Recorded readings with forecast and learned normal range." />
+          <SeriesCard
+            key={s.item_id}
+            series={s}
+            normal={normalFor(items, s.item_id)}
+            caption="Recorded readings with forecast; green dashed lines mark its learned normal range."
+          />
         ))}
       </div>
       <Provenance card={card} />
@@ -538,8 +555,9 @@ function QualityPage({ card }: { card: DashboardCard }) {
         {mainSeries && (
           <SeriesCard
             series={mainSeries}
+            normal={normalFor(items, mainSeries.item_id)}
             title={`${mainSeries.item_id} — trend`}
-            caption="Solid: recorded values. Dashed: forecast. Shaded band: this signal's own learned normal range."
+            caption="Solid: recorded values. Dashed: forecast. Green dashed lines: this signal's own learned normal range."
           />
         )}
         {main && (
@@ -566,8 +584,9 @@ function QualityPage({ card }: { card: DashboardCard }) {
           <SeriesCard
             key={s.item_id}
             series={s}
+            normal={normalFor(items, s.item_id)}
             title={`${s.item_id} — trend`}
-            caption="Solid: recorded values. Dashed: forecast. Shaded band: this signal's own learned normal range."
+            caption="Solid: recorded values. Dashed: forecast. Green dashed lines: this signal's own learned normal range."
           />
         ))}
       </div>
@@ -677,7 +696,162 @@ function DemandPage({ card }: { card: DashboardCard }) {
 
 // ------------------------------------------------------ deliveries page ---
 
-function DeliveriesPage({ card }: { card: DashboardCard }) {
+// A quote for a brand-new order that hasn't been placed yet — powered by its
+// own separately-trained model. Its input fields are never hardcoded: they
+// come straight from the backend's feature_columns, whatever this project's
+// real order data actually has, minus whatever a real LLM judgment excluded
+// as "not knowable before the order is placed" (typically the promised-date
+// column itself — asking for that back would be circular).
+function QuoteInbox({ projectId }: { projectId: string }) {
+  const [status, setStatus] = useState<QuoteModelStatus | null>(null);
+  const [training, setTraining] = useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [quote, setQuote] = useState<QuoteResult | null>(null);
+  const [quoting, setQuoting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setStatus(await api.getQuoteModelStatus(projectId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not check the quote model");
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (status?.status !== "pending") return;
+    const t = setInterval(refresh, 4000);
+    return () => clearInterval(t);
+  }, [status, refresh]);
+
+  if (error) {
+    return (
+      <SectionCard title="Quote a new order" subtitle="Get an expected delivery time for an order that hasn't been placed yet.">
+        <p className="text-sm text-[var(--danger)]">{error}</p>
+      </SectionCard>
+    );
+  }
+  if (!status) return null;
+
+  if (status.status === "untrained" || status.status === "failed") {
+    return (
+      <SectionCard title="Quote a new order" subtitle="Get an expected delivery time for an order that hasn't been placed yet, before it's in your system.">
+        {status.status === "failed" && <p className="text-sm text-[var(--danger)] mb-3">{status.error}</p>}
+        <button
+          disabled={training}
+          onClick={async () => {
+            setTraining(true);
+            try {
+              await api.trainQuoteModel(projectId);
+              await refresh();
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Could not start training");
+            } finally {
+              setTraining(false);
+            }
+          }}
+          className="bg-[var(--accent)] text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-40"
+        >
+          {training ? "Starting…" : "Set up quoting"}
+        </button>
+      </SectionCard>
+    );
+  }
+
+  if (status.status === "pending") {
+    return (
+      <SectionCard title="Quote a new order" subtitle="Get an expected delivery time for an order that hasn't been placed yet.">
+        <div className="flex items-center gap-3">
+          <span className="material-symbols-outlined animate-spin text-[var(--accent)]">progress_activity</span>
+          <p className="text-sm text-[var(--text-muted)]">Setting up quoting from your order history — this updates automatically.</p>
+        </div>
+      </SectionCard>
+    );
+  }
+
+  const dateField = status.reference_date_column;
+  // The date field is rendered separately, as a real date picker — an HTML
+  // date input always submits ISO YYYY-MM-DD regardless of how the browser
+  // displays it locally, which is what removes the DD-MM vs MM-DD ambiguity
+  // a free-text date field would otherwise have.
+  const fields = status.feature_columns;
+  const allRequired = dateField ? [...fields, dateField] : fields;
+
+  return (
+    <SectionCard
+      title="Quote a new order"
+      subtitle="Enter the details of an order that hasn't been placed yet — the estimate is computed the same way as everything else here, from your own completed orders."
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+        {dateField && (
+          <div>
+            <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1 capitalize">{dateField.replace(/_/g, " ")}</label>
+            <input
+              type="date"
+              value={values[dateField] ?? ""}
+              onChange={(e) => setValues((v) => ({ ...v, [dateField]: e.target.value }))}
+              className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+        )}
+        {fields.map((f) => (
+          <div key={f}>
+            <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1 capitalize">{f.replace(/_/g, " ")}</label>
+            <input
+              value={values[f] ?? ""}
+              onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))}
+              className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm"
+              placeholder={f}
+            />
+          </div>
+        ))}
+      </div>
+      <button
+        disabled={quoting || allRequired.some((f) => !values[f]?.trim())}
+        onClick={async () => {
+          setQuoting(true);
+          setQuote(null);
+          setError(null);
+          try {
+            setQuote(await api.getQuote(projectId, values));
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "Could not compute a quote");
+          } finally {
+            setQuoting(false);
+          }
+        }}
+        className="bg-[var(--accent)] text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-40"
+      >
+        {quoting ? "Computing…" : "Get expected date"}
+      </button>
+      {error && <p className="text-sm text-[var(--danger)] mt-3">{error}</p>}
+      {quote && (
+        <div className="grid grid-cols-2 gap-3 mt-4">
+          <StatTile
+            label="Typical case"
+            value={quote.typical_date ? fmtDate(quote.typical_date) : `${quote.typical_days.toFixed(1)}d`}
+            sub={quote.typical_date ? `~${quote.typical_days.toFixed(1)} days, median of similar past orders` : "median of similar past orders"}
+            icon="timelapse"
+          />
+          <StatTile
+            label="Safe to promise"
+            value={quote.suggested_promise_date ? fmtDate(quote.suggested_promise_date) : `${quote.suggested_promise_days.toFixed(1)}d`}
+            sub={quote.suggested_promise_date ? `~${quote.suggested_promise_days.toFixed(1)} days — ~90% of similar orders finished within this` : "~90% of similar orders finished within this"}
+            tone="ok"
+            icon="verified"
+          />
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function DeliveriesPage({ card, projectId }: { card: DashboardCard; projectId: string }) {
   const data = card.data as {
     orders?: DeliveryOrderRow[];
     feature_importance?: { feature: string; importance: number }[];
@@ -781,6 +955,7 @@ function DeliveriesPage({ card }: { card: DashboardCard }) {
           </div>
         </SectionCard>
       )}
+      <QuoteInbox projectId={projectId} />
       <Provenance card={card} />
     </div>
   );
@@ -926,57 +1101,461 @@ function MaterialsPage({ card, projectId, onSettingsSaved }: { card: DashboardCa
 }
 
 // -------------------------------------------------- production plan page --
+//
+// Every value here comes from scheduling_engine/solver.py's real CP-SAT
+// output (per-order tasks, makespan, solver_status, params) or is plain
+// arithmetic on it (utilization, duration, day ticks). Deliberately NOT
+// included yet, because the solver doesn't model them: priority/rush
+// weighting, maintenance windows, shift calendars, material gating,
+// setup/changeover time, and any "smart recommendation" — those need real
+// solver changes first (tracked separately), not a fake toggle here.
 
-const MACHINE_COLORS = ["#e05c7a", "#4cc3e8", "#b58cf0", "#3fd68f", "#f2b63c", "#6b9c95"];
+const ORDER_COLORS = ["#e05c7a", "#4cc3e8", "#b58cf0", "#3fd68f", "#f2b63c", "#6b9c95"];
 
-function PlanBars({ orders, machines, makespan }: { orders: ScheduleOrderRow[]; machines: string[]; makespan: number }) {
-  const colorOf = (m: string) => MACHINE_COLORS[machines.indexOf(m) % MACHINE_COLORS.length];
+function fmtHours(h: number): string {
+  const days = Math.floor(h / 24);
+  const hrs = Math.round(h - days * 24);
+  return days > 0 ? `${days}d ${hrs}h` : `${hrs}h`;
+}
+
+function fmtDateTime(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return `${d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}, ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+// One tick every 24h from the real schedule_start — not calendar midnight,
+// so it needs no timezone-boundary logic, just elapsed hours.
+function buildDayTicks(scheduleStart: string | undefined, makespanHours: number): { label: string; pct: number }[] {
+  if (!scheduleStart || makespanHours <= 0) return [];
+  const start = new Date(scheduleStart).getTime();
+  const ticks: { label: string; pct: number }[] = [];
+  for (let h = 0; h <= makespanHours; h += 24) {
+    const d = new Date(start + h * 3600000);
+    ticks.push({ label: d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }), pct: (h / makespanHours) * 100 });
+  }
+  return ticks;
+}
+
+function nowPct(scheduleStart: string | undefined, makespanHours: number): number | null {
+  if (!scheduleStart || makespanHours <= 0) return null;
+  const hoursElapsed = (Date.now() - new Date(scheduleStart).getTime()) / 3600000;
+  if (hoursElapsed < 0 || hoursElapsed > makespanHours) return null;
+  return (hoursElapsed / makespanHours) * 100;
+}
+
+function WorkCenterGantt({
+  orders, machines, makespan, scheduleStart, colorOf, maintenanceWindows, offShiftBlocks,
+}: {
+  orders: ScheduleOrderRow[]; machines: string[]; makespan: number; scheduleStart?: string;
+  colorOf: (orderId: string) => string;
+  maintenanceWindows?: Record<string, { start: string; end: string }[]>;
+  offShiftBlocks?: Record<string, { start: string; end: string }[]>;
+}) {
+  const ticks = buildDayTicks(scheduleStart, makespan);
+  const now = nowPct(scheduleStart, makespan);
+  const hourOf = (iso: string) =>
+    scheduleStart ? (new Date(iso).getTime() - new Date(scheduleStart).getTime()) / 3600000 : 0;
+
   return (
-    <>
-      <div className="space-y-2">
-        {orders.map((o) => (
-          <div key={o.order_id} className="flex items-center gap-3 text-xs">
-            <span className="font-mono text-[var(--text-muted)] w-20">{o.order_id}</span>
-            <div className="relative flex-1 h-4 bg-[var(--surface-2)] rounded overflow-hidden">
-              {o.tasks.map((t) => (
-                <div
-                  key={t.machine}
-                  className="absolute top-0 h-full"
-                  style={{
-                    left: `${(t.start_h / makespan) * 100}%`,
-                    width: `${Math.max(0.5, ((t.end_h - t.start_h) / makespan) * 100)}%`,
-                    background: colorOf(t.machine),
-                  }}
-                  title={t.machine}
-                />
-              ))}
-            </div>
-            <span className={`w-16 text-right font-semibold ${o.on_time ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
-              {o.on_time ? "on time" : `${o.hours_late}h late`}
+    <div className="overflow-x-auto">
+      {/* Wide enough that a day's worth of bars has room for its own label — at the
+          previous width every order collapsed to "ORD-2…" and had to be hovered. */}
+      <div className="grid" style={{ gridTemplateColumns: "210px 1fr", minWidth: 1500 }}>
+        <div className="border-b-2 border-[var(--border-strong)] pb-2 flex items-end">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-faint)]">Work centers</span>
+        </div>
+        <div className="relative border-b-2 border-[var(--border-strong)] pb-2" style={{ minHeight: 28 }}>
+          {ticks.map((t) => (
+            <span key={t.pct} className="absolute top-0 text-[10px] font-bold text-[var(--text)] whitespace-nowrap" style={{ left: `${t.pct}%` }}>
+              {t.label}
             </span>
-          </div>
-        ))}
+          ))}
+          {now !== null && <div className="absolute top-0 h-2 border-l border-dashed border-[var(--accent)]" style={{ left: `${now}%` }} />}
+        </div>
+
+        {machines.map((m, i) => {
+          const segs = orders
+            .flatMap((o) => o.tasks.filter((t) => t.machine === m).map((t) => ({ orderId: o.order_id, t })))
+            .sort((a, b) => a.t.start_h - b.t.start_h);
+          const busy = segs.reduce((s, seg) => s + (seg.t.end_h - seg.t.start_h), 0);
+          const utilization = makespan > 0 ? Math.round((busy / makespan) * 100) : 0;
+          const isLast = i === machines.length - 1;
+          return (
+            <Fragment key={m}>
+              <div className={`flex flex-col justify-center py-2 pr-3 ${isLast ? "" : "border-b border-[var(--border)]"}`} style={{ minHeight: 64 }}>
+                <div className="flex items-center justify-between mb-1 gap-2">
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--text)] truncate">
+                    <span className="material-symbols-outlined text-[16px] text-[var(--text-faint)]">precision_manufacturing</span>
+                    <span className="truncate">{m}</span>
+                  </span>
+                  <span className="text-xs font-bold text-[var(--accent)] flex-none">{utilization}%</span>
+                </div>
+                <div className="h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden">
+                  <div className="h-full bg-[var(--accent)] rounded-full" style={{ width: `${utilization}%` }} />
+                </div>
+              </div>
+              <div className={`relative ${isLast ? "" : "border-b border-[var(--border)]"}`} style={{ minHeight: 64 }}>
+                {segs.map((seg, j) => {
+                  const widthPct = Math.max(0.6, ((seg.t.end_h - seg.t.start_h) / makespan) * 100);
+                  // The full id needs roughly 60px of bar; the number alone needs ~26px.
+                  // A short task used to render blank, so rather than leave it anonymous the
+                  // shared "ORD-" prefix is dropped — every order in the legend carries it —
+                  // and only a bar too narrow for even that stays unlabelled.
+                  const shortId = seg.orderId.includes("-")
+                    ? seg.orderId.slice(seg.orderId.lastIndexOf("-") + 1)
+                    : seg.orderId;
+                  const label = widthPct >= 6 ? seg.orderId : widthPct >= 2 ? shortId : "";
+                  return (
+                    <div
+                      key={`${seg.orderId}-${j}`}
+                      className="absolute rounded-md flex items-center justify-center px-0.5 text-[11px] font-bold text-white overflow-hidden whitespace-nowrap"
+                      style={{
+                        left: `${(seg.t.start_h / makespan) * 100}%`,
+                        width: `${widthPct}%`,
+                        top: 7, bottom: 7,
+                        background: colorOf(seg.orderId),
+                      }}
+                      title={`${seg.orderId} on ${seg.t.machine}: ${fmtDateTime(seg.t.start)} – ${fmtDateTime(seg.t.end)}`}
+                    >
+                      {label}
+                    </div>
+                  );
+                })}
+                {(offShiftBlocks?.[m] ?? []).map((w, k) => {
+                  const wStart = hourOf(w.start);
+                  const wEnd = hourOf(w.end);
+                  return (
+                    <div
+                      key={`shift-${k}`}
+                      className="absolute rounded-md"
+                      style={{
+                        left: `${(wStart / makespan) * 100}%`,
+                        width: `${Math.max(0.3, ((wEnd - wStart) / makespan) * 100)}%`,
+                        top: 7, bottom: 7,
+                        background: "repeating-linear-gradient(45deg, #e2e5ec, #e2e5ec 4px, #eef1f7 4px, #eef1f7 8px)",
+                        border: "1px dashed var(--border-strong)", zIndex: 0,
+                      }}
+                      title={`Off-shift: ${fmtDateTime(w.start)} – ${fmtDateTime(w.end)}`}
+                    />
+                  );
+                })}
+                {(maintenanceWindows?.[m] ?? []).map((w, k) => {
+                  const wStart = hourOf(w.start);
+                  const wEnd = hourOf(w.end);
+                  const wPct = Math.max(0.6, ((wEnd - wStart) / makespan) * 100);
+                  return (
+                    <div
+                      key={`maint-${k}`}
+                      className="absolute rounded-md flex items-center justify-center text-[10px] font-bold uppercase tracking-wide overflow-hidden"
+                      style={{
+                        left: `${(wStart / makespan) * 100}%`,
+                        width: `${wPct}%`,
+                        top: 7, bottom: 7,
+                        background: "repeating-linear-gradient(45deg, var(--danger-soft), var(--danger-soft) 4px, #fff 4px, #fff 8px)",
+                        border: "1px dashed var(--danger)", color: "var(--danger)",
+                      }}
+                      title={`Predicted maintenance: ${fmtDateTime(w.start)} – ${fmtDateTime(w.end)}`}
+                    >
+                      {/* A one-hour window is a sliver, but the word "Maintenance" is ~90px —
+                          it used to spill across the orders next to it and read as a much
+                          bigger outage than it is. Only label it when it genuinely fits. */}
+                      {wPct >= 9 && "Maintenance"}
+                    </div>
+                  );
+                })}
+                {now !== null && <div className="absolute top-0 bottom-0 border-l border-dashed border-[var(--accent)]" style={{ left: `${now}%` }} />}
+              </div>
+            </Fragment>
+          );
+        })}
       </div>
-      <div className="flex flex-wrap gap-3 mt-4 pt-3 border-t border-[var(--border)]">
-        {machines.map((m) => (
-          <span key={m} className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: colorOf(m) }} />
-            {m}
+
+      <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-[var(--border)]">
+        {orders.map((o) => (
+          <span key={o.order_id} className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: colorOf(o.order_id) }} />
+            {o.order_id}
           </span>
         ))}
+        {Object.values(maintenanceWindows ?? {}).some((w) => w.length > 0) && (
+          <span className="flex items-center gap-1.5 text-xs text-[var(--danger)] font-semibold">
+            <span
+              className="w-2.5 h-2.5 rounded-sm inline-block border border-dashed border-[var(--danger)]"
+              style={{ background: "repeating-linear-gradient(45deg, var(--danger-soft), var(--danger-soft) 2px, #fff 2px, #fff 4px)" }}
+            />
+            Predicted maintenance — from Machine Health&apos;s own forecast
+          </span>
+        )}
+        {Object.values(offShiftBlocks ?? {}).some((w) => w.length > 0) && (
+          <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] font-semibold">
+            <span
+              className="w-2.5 h-2.5 rounded-sm inline-block border border-dashed border-[var(--border-strong)]"
+              style={{ background: "repeating-linear-gradient(45deg, #e2e5ec, #e2e5ec 2px, #eef1f7 2px, #eef1f7 4px)" }}
+            />
+            Off-shift — from the routing data&apos;s working hours
+          </span>
+        )}
       </div>
-    </>
+    </div>
   );
 }
 
-function ProductionPlanPage({ card }: { card: DashboardCard }) {
+function OrderPlanTable({
+  orders, colorOf, materialGatedOrders,
+}: { orders: ScheduleOrderRow[]; colorOf: (orderId: string) => string; materialGatedOrders?: Record<string, string> }) {
+  if (orders.length === 0) return <p className="text-xs text-[var(--text-faint)]">No orders in this plan.</p>;
+  const hasPriority = orders.some((o) => o.priority);
+  const hasProduct = orders.some((o) => o.product);
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs whitespace-nowrap">
+        <thead>
+          <tr className="text-left text-[10px] font-bold uppercase tracking-wide text-[var(--text-faint)] border-b border-[var(--border)]">
+            <th className="py-2 pr-3">Order</th>
+            {hasProduct && <th className="py-2 pr-3">Product</th>}
+            <th className="py-2 pr-3">Qty</th>
+            <th className="py-2 pr-3">Due date</th>
+            {hasPriority && <th className="py-2 pr-3">Priority</th>}
+            <th className="py-2 pr-3">Status</th>
+            <th className="py-2 pr-3">Start</th>
+            <th className="py-2 pr-3">Finish</th>
+            <th className="py-2 pr-3">Duration</th>
+            <th className="py-2 pr-3">Late by</th>
+            <th className="py-2">Work centers</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((o) => {
+            const first = o.tasks[0];
+            const last = o.tasks[o.tasks.length - 1];
+            const durationH = first && last ? last.end_h - first.start_h : 0;
+            return (
+              <tr key={o.order_id} className="border-b border-[var(--border)] last:border-0">
+                <td className="py-2 pr-3 font-mono font-semibold">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full inline-block" style={{ background: colorOf(o.order_id) }} />
+                    {o.order_id}
+                  </span>
+                </td>
+                {hasProduct && <td className="py-2 pr-3">{o.product ?? <span className="text-[var(--text-faint)]">—</span>}</td>}
+                <td className="py-2 pr-3 font-mono">{o.quantity.toLocaleString()}</td>
+                <td className="py-2 pr-3 font-mono">{fmtDate(o.due_date)}</td>
+                {hasPriority && (
+                  <td className="py-2 pr-3">
+                    {o.priority ? (
+                      <span className="inline-flex text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[var(--info-soft)] text-[var(--info)]">
+                        {o.priority}{o.priority_weight && o.priority_weight > 1 ? ` · ${o.priority_weight}x` : ""}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--text-faint)]">—</span>
+                    )}
+                  </td>
+                )}
+                <td className="py-2 pr-3">
+                  <span
+                    className={`inline-flex text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                      o.on_time ? "bg-[var(--success-soft)] text-[var(--success)]" : "bg-[var(--danger-soft)] text-[var(--danger)]"
+                    }`}
+                  >
+                    {o.on_time ? "On time" : "Late"}
+                  </span>
+                </td>
+                <td className="py-2 pr-3 font-mono">
+                  {first ? fmtDateTime(first.start) : "—"}
+                  {materialGatedOrders?.[o.order_id] && (
+                    <span
+                      className="material-symbols-outlined text-[13px] text-[var(--info)] ml-1 align-middle"
+                      title={`Waited on material until ${fmtDateTime(materialGatedOrders[o.order_id])}`}
+                    >
+                      local_shipping
+                    </span>
+                  )}
+                </td>
+                <td className="py-2 pr-3 font-mono">{fmtDateTime(o.completion)}</td>
+                <td className="py-2 pr-3 font-mono">{fmtHours(durationH)}</td>
+                <td className={`py-2 pr-3 font-mono ${o.hours_late ? "text-[var(--danger)] font-semibold" : "text-[var(--text-faint)]"}`}>
+                  {o.hours_late ? fmtHours(o.hours_late) : "—"}
+                </td>
+                <td className="py-2 text-[var(--text-faint)] font-mono">{o.tasks.map((t) => t.machine).join(" → ")}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PriorityWeightSettingsForm({
+  categories, projectId, onSaved,
+}: { categories: string[]; projectId: string; onSaved: () => void }) {
+  const [weights, setWeights] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const allFilled = categories.every((c) => weights[c]?.trim());
+  return (
+    <div className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-5">
+      <h3 className="text-sm font-bold text-[var(--text)] mb-1">Priority weights needed</h3>
+      <p className="text-xs text-[var(--text-muted)] mb-3">
+        Your orders carry a priority label the solver can&apos;t weigh yet — how much more a
+        higher-priority order&apos;s lateness should count is your call, not a guess. Enter a
+        whole-number multiplier for each (1 = no extra weight), then re-plan.
+      </p>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        {categories.map((c) => (
+          <div key={c}>
+            <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1">{c}</label>
+            <input
+              value={weights[c] ?? ""} onChange={(e) => setWeights((w) => ({ ...w, [c]: e.target.value }))}
+              type="number" min="1" step="1"
+              className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm" placeholder="e.g. 1"
+            />
+          </div>
+        ))}
+      </div>
+      <button
+        disabled={!allFilled || saving}
+        onClick={async () => {
+          setSaving(true);
+          for (const c of categories) {
+            await api.putSetting(projectId, `scheduling.priority_weight.${c.trim().toLowerCase()}`, weights[c]);
+          }
+          setSaving(false);
+          onSaved();
+        }}
+        className="bg-[var(--accent)] text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-40"
+      >
+        {saving ? "Saving & re-planning…" : "Save weights and re-plan"}
+      </button>
+    </div>
+  );
+}
+
+// Every recommendation below is rendered straight from a real field the backend
+// computed (a real re-solve's before/after, or a real utilization number) — no
+// text here is templated from a guess, and nothing is rendered for a rec type
+// this function doesn't recognize (fails visible, not with a vague fallback).
+function describeRecommendation(rec: Record<string, unknown> & { type: string }): { icon: string; title: string; detail: string; badge: string } | null {
+  if (rec.type === "bottleneck_machine") {
+    return {
+      icon: "priority_high",
+      title: `${rec.machine} is your busiest work center`,
+      detail: `${rec.utilization_pct}% of the makespan is spent processing on this machine — additional capacity here would have the most impact on reducing lateness across the whole plan.`,
+      badge: `${rec.utilization_pct}% utilized`,
+    };
+  }
+  if (rec.type === "shrink_maintenance_window") {
+    return {
+      icon: "bolt",
+      title: `Shrink ${rec.machine}'s predicted maintenance window by ${rec.shrink_hours}h`,
+      detail: `Re-solved with this one change: ${rec.order_id} moves from ${rec.hours_late_before}h late to ${rec.hours_late_after}h late (total lateness across the plan: ${rec.total_hours_late_before}h → ${rec.total_hours_late_after}h).`,
+      badge: `saves ${Number(rec.hours_late_before) - Number(rec.hours_late_after)}h on ${String(rec.order_id)}`,
+    };
+  }
+  if (rec.type === "expedite_material") {
+    return {
+      icon: "local_shipping",
+      title: `Get ${rec.order_id}'s material ${rec.shift_hours}h earlier`,
+      detail: `Re-solved with this one change: ${rec.order_id} moves from ${rec.hours_late_before}h late to ${rec.hours_late_after}h late (total lateness across the plan: ${rec.total_hours_late_before}h → ${rec.total_hours_late_after}h).`,
+      badge: `saves ${Number(rec.hours_late_before) - Number(rec.hours_late_after)}h on ${String(rec.order_id)}`,
+    };
+  }
+  if (rec.type === "weighted_order_still_late") {
+    return {
+      icon: "schedule",
+      title: `${rec.order_id} is still late despite its priority`,
+      detail: `Weighted ${rec.priority_weight}x as "${rec.priority}", it's still ${rec.hours_late}h late — this is the mathematically best possible outcome given current capacity. More priority weight won't fix this; more capacity or an earlier start would.`,
+      badge: "capacity-bound",
+    };
+  }
+  return null;
+}
+
+function RecommendationsList({ recommendations }: { recommendations: Array<Record<string, unknown> & { type: string }> }) {
+  const items = recommendations.map(describeRecommendation).filter((x): x is NonNullable<typeof x> => x !== null);
+  if (items.length === 0) {
+    return <p className="text-xs text-[var(--text-faint)]">No re-solve found a real improvement to suggest right now.</p>;
+  }
+  return (
+    <div className="divide-y divide-[var(--border)]">
+      {items.map((it, i) => (
+        <div key={i} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+          <span className="icon-tile flex-none w-9 h-9 rounded-lg bg-[var(--info-soft)] text-[var(--info)] flex items-center justify-center">
+            <span className="material-symbols-outlined text-[18px]">{it.icon}</span>
+          </span>
+          <div className="flex-1">
+            <div className="text-sm font-semibold text-[var(--text)]">{it.title}</div>
+            <div className="text-xs text-[var(--text-muted)] mt-0.5">{it.detail}</div>
+          </div>
+          <span className="text-[10px] font-bold uppercase px-2 py-1 rounded-full bg-[var(--surface-2)] text-[var(--text-muted)] flex-none whitespace-nowrap">
+            {it.badge}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SnapRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[var(--text-faint)]">{label}</span>
+      <span className="font-semibold text-[var(--text)] text-right">{value}</span>
+    </div>
+  );
+}
+
+function ProductionPlanPage({ card, projectId, onReplan }: { card: DashboardCard; projectId: string; onReplan: () => void }) {
   const data = card.data as {
     orders?: ScheduleOrderRow[]; machines?: string[]; makespan_hours?: number;
-    orders_on_time?: number; orders_late?: number; params?: { solver?: string };
+    solver_status?: string; schedule_start?: string;
+    params?: {
+      solver?: string; objective?: string; orders_count?: number; routing_steps?: number;
+      priority_weighted?: boolean; priority_categories_needing_weight?: string[];
+      maintenance_windows_applied?: Record<string, { start: string; end: string }[]>;
+      off_shift_blocks?: Record<string, { start: string; end: string }[]>;
+      material_gated_orders?: Record<string, string>;
+      changeover_applied?: Record<string, number>;
+    };
+    recommendations?: Array<Record<string, unknown> & { type: string }>;
   };
   const orders = data.orders ?? [];
   const machines = data.machines ?? [];
+  const makespan = data.makespan_hours || 1;
   const late = orders.filter((o) => !o.on_time).length;
+  const params = data.params ?? {};
+  const optimal = data.solver_status === "optimal";
+
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [replanError, setReplanError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeRunId) return;
+    const t = setInterval(async () => {
+      try {
+        const r = await api.getTrainingRun(projectId, activeRunId);
+        if (r.status !== "queued" && r.status !== "running") {
+          setActiveRunId(null);
+          onReplan();
+        }
+      } catch {
+        setActiveRunId(null);
+      }
+    }, 4000);
+    return () => clearInterval(t);
+  }, [activeRunId, projectId, onReplan]);
+
+  async function handleReplan() {
+    setReplanError(null);
+    try {
+      const run = await api.startTraining(projectId, "scheduling");
+      setActiveRunId(run.id);
+    } catch (e) {
+      setReplanError(e instanceof Error ? e.message : "Could not start re-plan");
+    }
+  }
+
+  const colorOf = (orderId: string) => ORDER_COLORS[Math.max(0, orders.findIndex((o) => o.order_id === orderId)) % ORDER_COLORS.length];
 
   return (
     <div className="space-y-4">
@@ -984,16 +1563,92 @@ function ProductionPlanPage({ card }: { card: DashboardCard }) {
         stats={[
           { label: "Orders in plan", value: String(orders.length), icon: "list_alt" },
           { label: "On time", value: String(orders.length - late), tone: "ok", icon: "check_circle" },
-          { label: "At risk", value: String(late), tone: late ? "watch" : "neutral", icon: "warning" },
-          { label: "Everything done in", value: `${data.makespan_hours ?? "—"}h`, sub: "verified optimal plan", icon: "timer" },
+          { label: "Late", value: String(late), tone: late ? "crit" : "neutral", icon: "warning" },
+          {
+            label: "Total quantity", value: orders.reduce((s, o) => s + o.quantity, 0).toLocaleString(),
+            sub: "sum of planned orders", icon: "inventory_2",
+          },
+          {
+            label: "Everything done in", value: fmtHours(makespan),
+            sub: optimal ? "verified optimal plan" : "feasible plan (time-limited)",
+            tone: optimal ? "ok" : "watch", icon: "timer",
+          },
         ]}
       />
-      <SectionCard
-        title="Order-by-order plan"
-        subtitle="Each bar is one order moving through the machines in sequence — an exact plan from the solver, not a heuristic guess."
-      >
-        <PlanBars orders={orders} machines={machines} makespan={data.makespan_hours || 1} />
-      </SectionCard>
+      {(params.priority_categories_needing_weight?.length ?? 0) > 0 && (
+        <PriorityWeightSettingsForm
+          categories={params.priority_categories_needing_weight!}
+          projectId={projectId}
+          onSaved={handleReplan}
+        />
+      )}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_280px] gap-4 items-start">
+        <div className="space-y-4 min-w-0">
+          <SectionCard
+            title="Production schedule"
+            subtitle="Every work center's real machine-by-machine load — an exact plan from the solver, not a heuristic guess."
+            action={
+              <div className="text-right">
+                <button
+                  onClick={handleReplan}
+                  disabled={!!activeRunId}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg px-3 py-1.5 disabled:opacity-60"
+                >
+                  <span className="material-symbols-outlined text-[16px]">autorenew</span>
+                  {activeRunId ? "Re-planning…" : "Re-plan now"}
+                </button>
+                {replanError && <div className="text-[10px] text-[var(--danger)] mt-1 max-w-[200px]">{replanError}</div>}
+              </div>
+            }
+          >
+            <WorkCenterGantt
+              orders={orders} machines={machines} makespan={makespan} scheduleStart={data.schedule_start}
+              colorOf={colorOf} maintenanceWindows={params.maintenance_windows_applied}
+              offShiftBlocks={params.off_shift_blocks}
+            />
+          </SectionCard>
+          <SectionCard title="Order-by-order plan" subtitle="Same schedule, one row per order.">
+            <OrderPlanTable orders={orders} colorOf={colorOf} materialGatedOrders={params.material_gated_orders} />
+          </SectionCard>
+        </div>
+        <div className="space-y-4">
+          <SectionCard title="Plan snapshot">
+            <div className="space-y-2.5 text-xs">
+              <SnapRow label="Solver" value={params.solver ?? "—"} />
+              <SnapRow label="Status" value={data.solver_status ?? "—"} />
+              <SnapRow label="Objective" value={params.objective ?? "—"} />
+              <SnapRow label="Orders / routing steps" value={`${params.orders_count ?? orders.length} / ${params.routing_steps ?? machines.length}`} />
+              <SnapRow label="Priority weighting" value={params.priority_weighted ? "Active" : "Not active"} />
+              {params.changeover_applied && Object.keys(params.changeover_applied).length > 0 && (
+                <SnapRow
+                  label="Changeover time"
+                  value={Object.entries(params.changeover_applied).map(([m, h]) => `${m}: ${h}h`).join(", ")}
+                />
+              )}
+              <SnapRow label="Generated" value={card.checked_at ? new Date(card.checked_at).toLocaleString() : "just now"} />
+            </div>
+          </SectionCard>
+          <SectionCard title="Orders by status">
+            <Donut
+              data={[
+                { name: "On time", value: orders.length - late, color: "var(--success)" },
+                { name: "Late", value: late, color: "var(--danger)" },
+              ]}
+              total={orders.length}
+              totalLabel="Orders"
+              size={96}
+            />
+          </SectionCard>
+        </div>
+      </div>
+      {data.recommendations && data.recommendations.length > 0 && (
+        <SectionCard
+          title="Smart recommendations"
+          subtitle="Each one comes from re-solving the same CP-SAT model with one real change, or a fact read straight from this solve — never a canned rule."
+        >
+          <RecommendationsList recommendations={data.recommendations} />
+        </SectionCard>
+      )}
       <Provenance card={card} />
     </div>
   );
@@ -1153,11 +1808,11 @@ function ObjectiveDetail({
       ) : card.objective === "demand_forecast" ? (
         <DemandPage card={card} />
       ) : card.objective === "delivery_date" ? (
-        <DeliveriesPage card={card} />
+        <DeliveriesPage card={card} projectId={projectId} />
       ) : card.objective === "inventory" ? (
         <MaterialsPage card={card} projectId={projectId} onSettingsSaved={onSettingsSaved} />
       ) : card.objective === "scheduling" ? (
-        <ProductionPlanPage card={card} />
+        <ProductionPlanPage card={card} projectId={projectId} onReplan={onSettingsSaved} />
       ) : null}
     </div>
   );
@@ -1222,3 +1877,4 @@ export function DecisionDashboard({ projectId, projectName }: { projectId: strin
 }
 
 export const DECISION_OBJECTIVES = OBJECTIVES;
+

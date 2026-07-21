@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Discovery running · Kinesis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+  <style>
+    /* ---- stepper ---- */
+    .steps { display:flex; gap:0; }
+    .step { flex:1; display:flex; align-items:center; gap:.6rem; padding:.6rem .5rem; position:relative; }
+    .step:not(:last-child)::after { content:""; position:absolute; right:-2px; top:50%; width:100%; height:2px; background:var(--border); z-index:0; }
+    .step .num { width:1.9rem; height:1.9rem; border-radius:999px; flex:none; display:flex; align-items:center; justify-content:center;
+      background:var(--surface-2); color:var(--text-faint); border:1.5px solid var(--border); font-weight:800; font-size:.8rem; z-index:1; transition:.3s; }
+    .step .txt { font-size:.8rem; font-weight:600; color:var(--text-faint); transition:.3s; }
+    .step.active .num { background:var(--accent); color:#fff; border-color:var(--accent); box-shadow:0 0 0 5px var(--accent-soft); animation:pulse 1.4s infinite; }
+    .step.active .txt { color:var(--accent-hover); }
+    .step.done .num { background:var(--success); color:#fff; border-color:var(--success); }
+    .step.done .txt { color:var(--text-muted); }
+    @keyframes pulse { 0%,100%{ box-shadow:0 0 0 4px var(--accent-soft);} 50%{ box-shadow:0 0 0 8px rgba(15,82,186,.10);} }
+
+    /* ---- progress ring ---- */
+    .ring { --p:0; width:64px; height:64px; border-radius:999px; flex:none;
+      background:conic-gradient(var(--accent) calc(var(--p)*1%), var(--surface-2) 0); display:flex; align-items:center; justify-content:center; transition:.3s; }
+    .ring > div { width:50px; height:50px; border-radius:999px; background:var(--surface); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.85rem; }
+
+    /* ---- streaming log ---- */
+    .log { font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:.75rem; line-height:1.7; height:250px; overflow:hidden; }
+    .log .line { opacity:0; transform:translateY(6px); animation:linein .3s forwards; }
+    .log .line .tag { display:inline-block; width:74px; }
+    .tag-parse{color:var(--info)} .tag-extract{color:var(--accent)} .tag-merge{color:var(--warning)} .tag-graph{color:var(--success)} .tag-ok{color:var(--success)}
+    @keyframes linein { to { opacity:1; transform:none; } }
+
+    /* ---- assembling graph ---- */
+    .canvas { position:relative; height:430px; background:
+      radial-gradient(circle, var(--border) 1px, transparent 1px) 0 0/22px 22px; border-radius:var(--radius); overflow:hidden; }
+    .gnode { position:absolute; width:132px; padding:.45rem .6rem; border-radius:8px; border:1.5px solid; font-size:.72rem; line-height:1.25;
+      opacity:0; transform:scale(.6); transition:opacity .4s, transform .4s cubic-bezier(.2,1.3,.4,1); background:#fff; z-index:2; }
+    .gnode.show { opacity:1; transform:scale(1); }
+    .gnode .k { font-size:.58rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; opacity:.7; }
+    .gnode .n { font-weight:700; }
+    .t-stage  { border-color:#933e00; background:#ffdbca; }
+    .t-asset  { border-color:#003c90; background:#d9e2ff; }
+    .t-signal { border-color:#2e7d32; background:#e8f5e9; }
+    .edges { position:absolute; inset:0; z-index:1; pointer-events:none; }
+    .edges path { stroke:var(--border-strong); stroke-width:1.5; fill:none; stroke-dasharray:400; stroke-dashoffset:400; animation:draw .6s forwards; opacity:.55; }
+    @keyframes draw { to { stroke-dashoffset:0; } }
+  </style>
+</head>
+<body data-persona="superadmin" data-active="onboard" data-title="Discovery running"
+      data-subtitle="Acme Steel Plant · understanding the factory from its documents">
+  <div class="k-shell">
+    <div id="k-sidebar-mount"></div>
+    <div class="k-main">
+      <div id="k-topbar-mount"></div>
+      <div class="k-content scrollbar-thin" style="overflow-y:auto">
+
+        <!-- header: phase + ring + controls -->
+        <div class="k-card k-section mb-4">
+          <div class="flex items-center justify-between gap-4 flex-wrap">
+            <div class="flex items-center gap-4">
+              <div class="ring" id="ring"><div id="ringpct">0%</div></div>
+              <div>
+                <div class="text-xs uppercase font-bold faint">Now</div>
+                <div class="text-lg font-extrabold" id="phase">Starting…</div>
+                <div class="text-xs muted" id="phasesub">Reading the uploaded sources</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="text-right">
+                <div class="text-xs faint uppercase font-bold">Discovered</div>
+                <div class="text-sm"><b id="cEnt">0</b> entities · <b id="cMerge">0</b> merges · <b id="cGap">0</b> questions</div>
+              </div>
+              <button class="k-btn k-btn-outline" onclick="Run.replay()"><span class="material-symbols-outlined" style="font-size:18px">replay</span>Replay</button>
+            </div>
+          </div>
+          <div class="steps mt-4" id="steps">
+            <div class="step" data-s="0"><span class="num">1</span><span class="txt">Parse sources</span></div>
+            <div class="step" data-s="1"><span class="num">2</span><span class="txt">Extract entities</span></div>
+            <div class="step" data-s="2"><span class="num">3</span><span class="txt">Resolve duplicates</span></div>
+            <div class="step" data-s="3"><span class="num">4</span><span class="txt">Build graph</span></div>
+            <div class="step" data-s="4"><span class="num">5</span><span class="txt">Validate</span></div>
+          </div>
+        </div>
+
+        <div class="grid gap-4" style="grid-template-columns:380px 1fr; align-items:start">
+          <!-- streaming activity log -->
+          <div class="k-card k-section">
+            <div class="head"><div><h3>Live activity</h3><div class="subtitle">Every step is shown as it happens — nothing hidden.</div></div>
+              <span class="k-badge k-badge-info" id="running"><span class="material-symbols-outlined" style="font-size:14px">bolt</span>Running</span></div>
+            <div class="log scrollbar-thin" id="log"></div>
+          </div>
+
+          <!-- assembling graph -->
+          <div class="k-card k-section">
+            <div class="head"><div><h3>Process map — assembling</h3><div class="subtitle">Each box appears the moment the system discovers it; lines draw in as relationships are found.</div></div></div>
+            <div class="canvas" id="canvas">
+              <svg class="edges" id="edges" viewBox="0 0 600 430" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- done banner (hidden until finished) -->
+        <div class="k-card k-section mt-4" id="done" style="display:none; border:1px solid var(--success)">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex items-center gap-3">
+              <span class="icon-tile" style="background:var(--success-soft);color:var(--success)"><span class="material-symbols-outlined fill">task_alt</span></span>
+              <div>
+                <div class="font-extrabold">Discovery complete</div>
+                <div class="text-xs muted"><b>10</b> entities found · <b>1</b> auto-merged · <b>12</b> questions need your confirmation before this becomes a version.</div>
+              </div>
+            </div>
+            <a class="k-btn k-btn-primary" href="super-admin.html#requests"><span class="material-symbols-outlined" style="font-size:18px">rule</span>Review 12 questions</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="k-proto"><span class="material-symbols-outlined" style="font-size:15px">draw</span>Prototype · scripted run for demo</div>
+  <script src="assets/shell.js"></script>
+  <script>
+  const Run = (() => {
+    // node layout (x,y are top-left in the 600x430 canvas space, scaled to px)
+    const NODES = [
+      { id:"recv",  t:"stage",  k:"Stage",  n:"Receiving dock",     x:20,  y:24 },
+      { id:"heat",  t:"stage",  k:"Stage",  n:"Heat treatment",     x:20,  y:130 },
+      { id:"cool",  t:"stage",  k:"Stage",  n:"Cooling",            x:20,  y:236 },
+      { id:"insp",  t:"stage",  k:"Stage",  n:"Inspection",         x:20,  y:342 },
+      { id:"furn",  t:"asset",  k:"Asset",  n:"Furnace 3",          x:236, y:80 },
+      { id:"conv",  t:"asset",  k:"Asset",  n:"Cooling Conveyor",   x:236, y:236 },
+      { id:"istn",  t:"asset",  k:"Asset",  n:"Inspection Stn",     x:236, y:342 },
+      { id:"temp",  t:"signal", k:"Signal", n:"FCE-03_TEMP",        x:452, y:40 },
+      { id:"vib",   t:"signal", k:"Signal", n:"FCE-03_VIB",         x:452, y:120 },
+      { id:"spd",   t:"signal", k:"Signal", n:"CNV-12_SPEED",       x:452, y:236 },
+    ];
+    const EDGES = [
+      ["recv","heat"], ["heat","cool"], ["cool","insp"],
+      ["furn","heat"], ["conv","cool"], ["istn","insp"],
+      ["temp","furn"], ["vib","furn"], ["spd","conv"],
+    ];
+    // scripted timeline of log lines; each may reveal a node/edge and bump counters
+    const SCRIPT = [
+      { t:0,    step:0, phase:"Parsing sources", sub:"Reading the uploaded files", log:["parse","Parsed machine_list.csv — 4 rows"] },
+      { t:500,  log:["parse","Parsed sop.txt — 1,240 words"] },
+      { t:950,  log:["parse","Parsed sensor_tags.csv — 9 tags"] },
+      { t:1400, step:1, phase:"Extracting entities", sub:"Asking the model what each thing is", log:["extract","Furnace 3 → asset"], node:"furn", ent:1 },
+      { t:1750, log:["extract","Heat treatment cycle → stage"], node:"heat", ent:2 },
+      { t:2050, log:["extract","FCE-03_TEMP → signal (process)"], node:"temp", ent:3 },
+      { t:2350, log:["extract","FCE-03_VIB → signal (mechanical)"], node:"vib", ent:4 },
+      { t:2650, log:["extract","Receiving dock → stage"], node:"recv", ent:5 },
+      { t:2950, log:["extract","Cooling Conveyor → asset"], node:"conv", ent:6 },
+      { t:3250, log:["extract","Cooling → stage"], node:"cool", ent:7 },
+      { t:3550, log:["extract","CNV-12_SPEED → signal (process)"], node:"spd", ent:8 },
+      { t:3850, log:["extract","Inspection Station → asset"], node:"istn", ent:9 },
+      { t:4150, log:["extract","Inspection → stage"], node:"insp", ent:10 },
+      { t:4600, step:2, phase:"Resolving duplicates", sub:"Same thing, different names?", log:["merge","'FCE-03' ↔ 'Furnace 3' — similarity 0.81 → auto-merge"], merge:1 },
+      { t:5050, log:["merge","'Furnace 3' ↔ 'Furnace 3 door' — 0.69 → ask a human"], gap:1 },
+      { t:5450, log:["merge","'Cooling Conveyor' ↔ 'cooling belt' — 0.63 → ask a human"], gap:2 },
+      { t:5900, step:3, phase:"Building graph", sub:"Wiring relationships in Neo4j", log:["graph","Furnace 3 —part_of→ Heat treatment"], edge:["furn","heat"] },
+      { t:6150, log:["graph","FCE-03_TEMP —measures→ Furnace 3"], edge:["temp","furn"] },
+      { t:6400, log:["graph","FCE-03_VIB —measures→ Furnace 3"], edge:["vib","furn"] },
+      { t:6650, log:["graph","Receiving —precedes→ Heat treatment"], edge:["recv","heat"] },
+      { t:6900, log:["graph","Heat treatment —precedes→ Cooling"], edge:["heat","cool"] },
+      { t:7150, log:["graph","Cooling Conveyor —part_of→ Cooling"], edge:["conv","cool"] },
+      { t:7400, log:["graph","CNV-12_SPEED —measures→ Cooling Conveyor"], edge:["spd","conv"] },
+      { t:7650, log:["graph","Cooling —precedes→ Inspection"], edge:["cool","insp"] },
+      { t:7900, log:["graph","Inspection Stn —part_of→ Inspection"], edge:["istn","insp"] },
+      { t:8350, step:4, phase:"Validating", sub:"Checking for gaps & orphans", log:["extract","Packaging Line PKG-2 — no relationship found → question"], gap:3 },
+      { t:8750, log:["extract","'logged for next step' — missing successor → question"], gap:4 },
+      { t:9150, phase:"Discovery complete", sub:"Ready for human review", log:["ok","Done — 10 entities, 1 auto-merge, 12 questions"], done:true },
+    ];
+
+    let timers = [];
+    const $ = (id) => document.getElementById(id);
+    const nodeEls = {};
+
+    function px(v, dim) { const c = $("canvas"); return dim==="x" ? v/600*c.clientWidth : v/430*c.clientHeight; }
+
+    function build() {
+      const c = $("canvas");
+      // clear previous
+      c.querySelectorAll(".gnode").forEach((e)=>e.remove());
+      $("edges").innerHTML = "";
+      $("log").innerHTML = "";
+      Object.keys(nodeEls).forEach(k=>delete nodeEls[k]);
+      NODES.forEach((nd) => {
+        const el = document.createElement("div");
+        el.className = `gnode t-${nd.t}`;
+        el.style.left = px(nd.x,"x")+"px"; el.style.top = px(nd.y,"y")+"px";
+        el.innerHTML = `<div class="k">${nd.k}</div><div class="n">${nd.n}</div>`;
+        c.appendChild(el); nodeEls[nd.id] = { el, nd };
+      });
+    }
+
+    function center(id){ const {nd}=nodeEls[id]; return { x: nd.x+66, y: nd.y+22 }; }
+
+    function drawEdge(a,b){
+      const p1=center(a), p2=center(b);
+      const mx=(p1.x+p2.x)/2;
+      const d=`M ${p1.x} ${p1.y} C ${mx} ${p1.y}, ${mx} ${p2.y}, ${p2.x} ${p2.y}`;
+      const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+      path.setAttribute("d",d); $("edges").appendChild(path);
+    }
+
+    function setStep(s){
+      document.querySelectorAll(".step").forEach((el)=>{
+        const i=+el.dataset.s; el.classList.toggle("active", i===s); el.classList.toggle("done", i<s);
+      });
+    }
+    function setRing(p){ $("ring").style.setProperty("--p",p); $("ringpct").textContent=Math.round(p)+"%"; }
+
+    function addLog(tag,text){
+      const map={parse:"PARSE",extract:"EXTRACT",merge:"RESOLVE",graph:"GRAPH",ok:"DONE"};
+      const line=document.createElement("div");
+      line.className="line";
+      line.innerHTML=`<span class="tag tag-${tag}">${map[tag]||tag}</span>${text}`;
+      const log=$("log"); log.prepend(line);
+      while(log.children.length>10) log.lastChild.remove();
+    }
+
+    let ents=0, merges=0, gaps=0;
+    function run(){
+      stop(); build(); setStep(0); setRing(0); ents=merges=gaps=0;
+      $("cEnt").textContent=0; $("cMerge").textContent=0; $("cGap").textContent=0;
+      $("done").style.display="none"; $("running").style.display="inline-flex";
+      const total=SCRIPT[SCRIPT.length-1].t;
+      SCRIPT.forEach((ev)=>{
+        timers.push(setTimeout(()=>{
+          if(ev.step!==undefined) setStep(ev.step);
+          if(ev.phase){ $("phase").textContent=ev.phase; $("phasesub").textContent=ev.sub||""; }
+          if(ev.log) addLog(ev.log[0],ev.log[1]);
+          if(ev.node && nodeEls[ev.node]) nodeEls[ev.node].el.classList.add("show");
+          if(ev.edge) drawEdge(ev.edge[0],ev.edge[1]);
+          if(ev.ent!==undefined){ ents=ev.ent; $("cEnt").textContent=ents; }
+          if(ev.merge){ merges+=ev.merge; $("cMerge").textContent=merges; }
+          if(ev.gap){ gaps=ev.gap; $("cGap").textContent=gaps; }
+          setRing(ev.t/total*100);
+          if(ev.done){ setRing(100); setStep(5); $("running").style.display="none"; $("done").style.display="block"; }
+        }, ev.t));
+      });
+    }
+    function stop(){ timers.forEach(clearTimeout); timers=[]; }
+
+    // start after shell mounts & layout settles
+    window.addEventListener("load", ()=> setTimeout(run, 400));
+    return { replay: run };
+  })();
+  </script>
+</body>
+</html>

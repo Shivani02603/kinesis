@@ -1,6 +1,0 @@
-tag_id,description,unit
-MX1_VIB,Mixer MX-1 condition-monitoring vibration,mm/s
-FL4_VIB,Filler FL-4 condition-monitoring vibration,mm/s
-CP2_VIB,Capper CP-2 condition-monitoring vibration,mm/s
-LB3_VIB,Labeler LB-3 condition-monitoring vibration,mm/s
-FILL_LEVEL_REJECT_RATE,Percent of bottles rejected for out-of-spec fill level,%

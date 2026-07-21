@@ -1,0 +1,426 @@
+Beginning AutoGluon training... Time limit = 600s
+AutoGluon will save models to 'C:\Users\Shivani\Desktop\kinesis_final\backend\models\71ea40ba-96b7-4db3-b92a-4bea9a003323\3d6f11f0-811c-482a-a435-4e84f173594a'
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.11.9
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.26200
+CPU Count:          8
+Pytorch Version:    2.9.1+cpu
+CUDA Version:       CUDA is not available
+GPU Memory:         
+Total GPU Memory:   Free: 0.00 GB, Allocated: 0.00 GB, Total: 0.00 GB
+GPU Count:          0
+Memory Avail:       0.60 GB / 7.75 GB (7.8%)
+Disk Space Avail:   84.16 GB / 296.49 GB (28.4%)
+===================================================
+Setting presets to: medium_quality
+
+Fitting with arguments:
+{'enable_ensemble': True,
+ 'eval_metric': WQL,
+ 'hyperparameters': 'light',
+ 'known_covariates_names': [],
+ 'num_val_windows': 1,
+ 'prediction_length': 6,
+ 'quantile_levels': [0.1, 0.5, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'target',
+ 'time_limit': 600,
+ 'verbosity': 2}
+
+Inferred time series frequency: 'D'
+Provided train_data has 240 rows, 8 time series. Median time series length is 30 (min=30, max=30). 
+
+Provided data contains following columns:
+	target: 'target'
+
+AutoGluon will gauge predictive performance using evaluation metric: 'WQL'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+===================================================
+
+Starting training. Start time is 2026-07-20 15:03:24
+Models that will be trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos2', 'TemporalFusionTransformer']
+Training timeseries model SeasonalNaive. Training for up to 75.0s of the 600.0s of remaining time.
+	-0.0444       = Validation score (-WQL)
+	0.02    s     = Training runtime
+	0.03    s     = Validation (prediction) runtime
+Training timeseries model RecursiveTabular. Training for up to 85.7s of the 599.9s of remaining time.
+	-0.0472       = Validation score (-WQL)
+	1.30    s     = Training runtime
+	0.08    s     = Validation (prediction) runtime
+Training timeseries model DirectTabular. Training for up to 99.8s of the 598.5s of remaining time.
+	-0.1562       = Validation score (-WQL)
+	0.56    s     = Training runtime
+	0.11    s     = Validation (prediction) runtime
+Training timeseries model ETS. Training for up to 119.6s of the 597.8s of remaining time.
+	-0.0441       = Validation score (-WQL)
+	0.02    s     = Training runtime
+	0.14    s     = Validation (prediction) runtime
+Training timeseries model Theta. Training for up to 149.4s of the 597.6s of remaining time.
+	-0.1104       = Validation score (-WQL)
+	0.01    s     = Training runtime
+	0.03    s     = Validation (prediction) runtime
+Training timeseries model Chronos2. Training for up to 199.2s of the 597.6s of remaining time.
+	-0.0594       = Validation score (-WQL)
+	4.10    s     = Training runtime
+	0.18    s     = Validation (prediction) runtime
+Training timeseries model TemporalFusionTransformer. Training for up to 296.6s of the 593.3s of remaining time.
+	-0.0291       = Validation score (-WQL)
+	193.04  s     = Training runtime
+	0.11    s     = Validation (prediction) runtime
+Fitting 1 ensemble(s), in 1 layers.
+Training ensemble model WeightedEnsemble. Training for up to 399.9s.
+	Ensemble weights: {'TemporalFusionTransformer': 1.0}
+	-0.0291       = Validation score (-WQL)
+	0.62    s     = Training runtime
+	0.11    s     = Validation (prediction) runtime
+Training complete. Models trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos2', 'TemporalFusionTransformer', 'WeightedEnsemble']
+Total runtime: 201.02 s
+Best model: TemporalFusionTransformer
+Best model score: -0.0291
+Additional data provided, testing on additional data. Resulting leaderboard will be sorted according to test score (`score_test`).
+Model not specified in predict, will default to the model with the best validation score: TemporalFusionTransformer
+Verbosity: 2 (Standard Logging)
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.11.9
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.26200
+CPU Count:          8
+Pytorch Version:    2.9.1+cpu
+CUDA Version:       CUDA is not available
+Memory Avail:       0.78 GB / 7.75 GB (10.0%)
+Disk Space Avail:   84.16 GB / 296.49 GB (28.4%)
+===================================================
+Presets specified: ['medium_quality']
+Using hyperparameters preset: hyperparameters='default'
+Beginning AutoGluon training ... Time limit = 600s
+AutoGluon will save models to "C:\Users\Shivani\Desktop\kinesis_final\backend\models\71ea40ba-96b7-4db3-b92a-4bea9a003323\55fcb122-cebc-427a-8178-4db9242432b9"
+Train Data Rows:    40
+Train Data Columns: 6
+Label Column:       actual_lead_time_days
+Problem Type:       regression
+Preprocessing data ...
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    757.55 MB
+	Train Data (Original)  Memory Usage: 0.01 MB (0.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 1 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+		Fitting DatetimeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Stage 5 Generators:
+		Fitting DropDuplicatesFeatureGenerator...
+	Unused Original Features (Count: 1): ['order_id']
+		These features were not used to generate any of the output features. Add a feature generator compatible with these features to utilize them.
+		Features can also be unused if they carry very little information, such as being categorical but having almost entirely unique values or being duplicates of other features.
+		These features do not need to be present at inference time.
+		('object', []) : 1 | ['order_id']
+	Types of features in original data (raw dtype, special dtypes):
+		('int', [])                        : 2 | ['quantity', 'promised_lead_days']
+		('object', [])                     : 2 | ['destination_region', 'rush_order']
+		('object', ['datetime_as_object']) : 1 | ['order_date']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])             : 1 | ['destination_region']
+		('int', [])                  : 2 | ['quantity', 'promised_lead_days']
+		('int', ['bool'])            : 1 | ['rush_order']
+		('int', ['datetime_as_int']) : 4 | ['order_date', 'order_date.month', 'order_date.day', 'order_date.dayofweek']
+	0.1s = Fit runtime
+	5 features in original data used to generate 8 features in processed data.
+	Train Data (Processed) Memory Usage: 0.00 MB (0.0% of available memory)
+Data preprocessing and feature engineering runtime = 0.1s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'root_mean_squared_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.2, Train Rows: 32, Val Rows: 8
+User-specified model hyperparameters to be fit:
+{
+	'NN_TORCH': [{}],
+	'GBM': [{'extra_trees': True, 'ag_args': {'name_suffix': 'XT'}}, {}, {'learning_rate': 0.03, 'num_leaves': 128, 'feature_fraction': 0.9, 'min_data_in_leaf': 3, 'ag_args': {'name_suffix': 'Large', 'priority': 0, 'hyperparameter_tune_kwargs': None}}],
+	'CAT': [{}],
+	'XGB': [{}],
+	'FASTAI': [{}],
+	'RF': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+	'XT': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+}
+Fitting 9 L1 models, fit_strategy="sequential" ...
+Fitting model: LightGBMXT ... Training model for up to 599.90s of the 599.89s of remaining time.
+	Fitting with cpus=4, gpus=0, mem=0.0/0.7 GB
+Warning: Low available memory may cause OOM error if training continues
+Available Memory: 456 MB
+Estimated GBM model size: 0 MB
+Warning: Early stopped GBM model prior to optimal result to avoid OOM error. Please increase available memory to avoid subpar model quality.
+	-1.7165	 = Validation score   (-root_mean_squared_error)
+	0.96s	 = Training   runtime
+	0.01s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 598.92s of the 598.91s of remaining time.
+	Fitting with cpus=4, gpus=0, mem=0.0/0.4 GB
+	-1.7165	 = Validation score   (-root_mean_squared_error)
+	0.39s	 = Training   runtime
+	0.01s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 598.51s of the 598.50s of remaining time.
+	Fitting with cpus=8, gpus=0
+	-1.4072	 = Validation score   (-root_mean_squared_error)
+	3.43s	 = Training   runtime
+	0.09s	 = Validation runtime
+Fitting model: CatBoost ... Training model for up to 594.92s of the 594.91s of remaining time.
+	Fitting with cpus=4, gpus=0
+	-1.288	 = Validation score   (-root_mean_squared_error)
+	10.3s	 = Training   runtime
+	0.01s	 = Validation runtime
+Fitting model: ExtraTreesMSE ... Training model for up to 584.59s of the 584.58s of remaining time.
+	Fitting with cpus=8, gpus=0
+	-1.3167	 = Validation score   (-root_mean_squared_error)
+	0.59s	 = Training   runtime
+	0.12s	 = Validation runtime
+Fitting model: NeuralNetFastAI ... Training model for up to 583.86s of the 583.85s of remaining time.
+	Fitting with cpus=4, gpus=0, mem=0.0/0.6 GB
+	Warning: Exception caused NeuralNetFastAI to fail during training... Skipping this model.
+		'list' object has no attribute 'starmap'
+Detailed Traceback:
+Traceback (most recent call last):
+  File "C:\Users\Shivani\AppData\Local\Programs\Python\Python311\Lib\site-packages\autogluon\tabular\trainer\abstract_trainer.py", line 2201, in _train_and_save
+    model = self._train_single(**model_fit_kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Shivani\AppData\Local\Programs\Python\Python311\Lib\site-packages\autogluon\tabular\trainer\abstract_trainer.py", line 2085, in _train_single
+    model = model.fit(X=X, y=y, X_val=X_val, y_val=y_val, X_test=X_test, y_test=y_test, total_resources=total_resources, **model_fit_kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Shivani\AppData\Local\Programs\Python\Python311\Lib\site-packages\autogluon\core\models\abstract\abstract_model.py", line 1125, in fit
+    out = self._fit(**kwargs)
+          ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Shivani\AppData\Local\Programs\Python\Python311\Lib\site-packages\autogluon\tabular\models\fastainn\tabular_nn_fastai.py", line 379, in _fit
+    self.model.fit_one_cycle(epochs, params["lr"], cbs=callbacks)
+  File "C:\Users\Shivani\AppData\Local\Programs\Python\Python311\Lib\site-packages\fastai\callback\schedule.py", line 116, in fit_one_cycle
+    if self.opt is None: self.create_opt()
+                         ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Shivani\AppData\Local\Programs\Python\Python311\Lib\site-packages\fastai\learner.py", line 196, in create_opt
+    self.opt = self.opt_func(self.splitter(self.model), lr=self.lr)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Shivani\AppData\Local\Programs\Python\Python311\Lib\site-packages\fastai\optimizer.py", line 244, in Adam
+    return Optimizer(params, cbs, lr=lr, mom=mom, sqr_mom=sqr_mom, eps=eps, wd=wd)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Shivani\AppData\Local\Programs\Python\Python311\Lib\site-packages\fastai\optimizer.py", line 102, in __init__
+    self.set_hypers(**defaults)
+  File "C:\Users\Shivani\AppData\Local\Programs\Python\Python311\Lib\site-packages\fastai\optimizer.py", line 46, in set_hypers
+    def set_hypers(self, **kwargs): L(kwargs.items()).starmap(self.set_hyper)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Shivani\AppData\Local\Programs\Python\Python311\Lib\site-packages\fastcore\basics.py", line 578, in __getattr__
+    if attr is not None: return getattr(attr,k)
+                                ^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'starmap'
+Fitting model: XGBoost ... Training model for up to 578.20s of the 578.19s of remaining time.
+	Fitting with cpus=4, gpus=0
+	-1.5089	 = Validation score   (-root_mean_squared_error)
+	0.22s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: NeuralNetTorch ... Training model for up to 577.95s of the 577.94s of remaining time.
+	Fitting with cpus=4, gpus=0, mem=0.0/0.6 GB
+	-1.0024	 = Validation score   (-root_mean_squared_error)
+	1.14s	 = Training   runtime
+	0.01s	 = Validation runtime
+Fitting model: LightGBMLarge ... Training model for up to 576.79s of the 576.78s of remaining time.
+	Fitting with cpus=4, gpus=0, mem=0.1/0.6 GB
+	-1.3406	 = Validation score   (-root_mean_squared_error)
+	0.37s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 360.00s of the 576.36s of remaining time.
+	Fitting 1 model on all data | Fitting with cpus=8, gpus=0, mem=0.0/0.5 GB
+	Ensemble Weights: {'NeuralNetTorch': 0.684, 'CatBoost': 0.316}
+	-0.9108	 = Validation score   (-root_mean_squared_error)
+	0.01s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 23.72s ... Best model: WeightedEnsemble_L2 | Estimated inference throughput: 383.9 rows/s (8 batch size)
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("C:\Users\Shivani\Desktop\kinesis_final\backend\models\71ea40ba-96b7-4db3-b92a-4bea9a003323\55fcb122-cebc-427a-8178-4db9242432b9")
+These features in provided data are not utilized by the predictor and will be ignored: ['order_id']
+Computing feature importance via permutation shuffling for 5 features using 40 rows with 5 shuffle sets...
+	1.64s	= Expected runtime (0.33s per shuffle set)
+	0.28s	= Actual runtime (Completed 5 of 5 shuffle sets)
+Beginning AutoGluon training... Time limit = 600s
+AutoGluon will save models to 'C:\Users\Shivani\Desktop\kinesis_final\backend\models\70d1d541-11be-452e-87f3-f72966a1d0cc\b215ec40-6bf8-4135-967f-dfa68e7b286c'
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.11.9
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.26200
+CPU Count:          8
+Pytorch Version:    2.9.1+cpu
+CUDA Version:       CUDA is not available
+GPU Memory:         
+Total GPU Memory:   Free: 0.00 GB, Allocated: 0.00 GB, Total: 0.00 GB
+GPU Count:          0
+Memory Avail:       0.71 GB / 7.75 GB (9.2%)
+Disk Space Avail:   83.89 GB / 296.49 GB (28.3%)
+===================================================
+Setting presets to: medium_quality
+
+Fitting with arguments:
+{'enable_ensemble': True,
+ 'eval_metric': WQL,
+ 'hyperparameters': 'light',
+ 'known_covariates_names': [],
+ 'num_val_windows': 1,
+ 'prediction_length': 48,
+ 'quantile_levels': [0.1, 0.5, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'target',
+ 'time_limit': 600,
+ 'verbosity': 2}
+
+Inferred time series frequency: 'h'
+Provided train_data has 960 rows, 4 time series. Median time series length is 240 (min=240, max=240). 
+
+Provided data contains following columns:
+	target: 'target'
+
+AutoGluon will gauge predictive performance using evaluation metric: 'WQL'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+===================================================
+
+Starting training. Start time is 2026-07-20 15:57:42
+Models that will be trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos2', 'TemporalFusionTransformer']
+Training timeseries model SeasonalNaive. Training for up to 75.0s of the 599.8s of remaining time.
+	-0.0660       = Validation score (-WQL)
+	0.06    s     = Training runtime
+	48.08   s     = Validation (prediction) runtime
+Training timeseries model RecursiveTabular. Training for up to 78.8s of the 551.6s of remaining time.
+	-0.1139       = Validation score (-WQL)
+	6.72    s     = Training runtime
+	0.47    s     = Validation (prediction) runtime
+Training timeseries model DirectTabular. Training for up to 90.7s of the 544.3s of remaining time.
+	-0.1078       = Validation score (-WQL)
+	2.91    s     = Training runtime
+	0.21    s     = Validation (prediction) runtime
+Training timeseries model ETS. Training for up to 108.2s of the 541.1s of remaining time.
+	-0.0565       = Validation score (-WQL)
+	0.04    s     = Training runtime
+	16.73   s     = Validation (prediction) runtime
+Training timeseries model Theta. Training for up to 131.1s of the 524.3s of remaining time.
+	-0.0621       = Validation score (-WQL)
+	0.02    s     = Training runtime
+	0.08    s     = Validation (prediction) runtime
+Training timeseries model Chronos2. Training for up to 174.7s of the 524.2s of remaining time.
+	-0.0525       = Validation score (-WQL)
+	4.74    s     = Training runtime
+	1.02    s     = Validation (prediction) runtime
+Training timeseries model TemporalFusionTransformer. Training for up to 259.2s of the 518.4s of remaining time.
+	-0.0899       = Validation score (-WQL)
+	234.91  s     = Training runtime
+	0.10    s     = Validation (prediction) runtime
+Fitting 1 ensemble(s), in 1 layers.
+Training ensemble model WeightedEnsemble. Training for up to 283.0s.
+	Ensemble weights: {'Chronos2': 0.69, 'ETS': 0.24, 'RecursiveTabular': 0.06}
+	-0.0509       = Validation score (-WQL)
+	0.94    s     = Training runtime
+	18.22   s     = Validation (prediction) runtime
+Training complete. Models trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos2', 'TemporalFusionTransformer', 'WeightedEnsemble']
+Total runtime: 318.11 s
+Best model: WeightedEnsemble
+Best model score: -0.0509
+Additional data provided, testing on additional data. Resulting leaderboard will be sorted according to test score (`score_test`).
+Model not specified in predict, will default to the model with the best validation score: WeightedEnsemble
+Beginning AutoGluon training... Time limit = 600s
+AutoGluon will save models to 'C:\Users\Shivani\Desktop\kinesis_final\backend\models\70d1d541-11be-452e-87f3-f72966a1d0cc\a626ed00-6f28-4b92-ad19-abcbe0004d4b'
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.11.9
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.26200
+CPU Count:          8
+Pytorch Version:    2.9.1+cpu
+CUDA Version:       CUDA is not available
+GPU Memory:         
+Total GPU Memory:   Free: 0.00 GB, Allocated: 0.00 GB, Total: 0.00 GB
+GPU Count:          0
+Memory Avail:       0.76 GB / 7.75 GB (9.8%)
+Disk Space Avail:   83.97 GB / 296.49 GB (28.3%)
+===================================================
+Setting presets to: medium_quality
+
+Fitting with arguments:
+{'enable_ensemble': True,
+ 'eval_metric': WQL,
+ 'hyperparameters': 'light',
+ 'known_covariates_names': [],
+ 'num_val_windows': 1,
+ 'prediction_length': 2,
+ 'quantile_levels': [0.1, 0.5, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'target',
+ 'time_limit': 600,
+ 'verbosity': 2}
+
+Inferred time series frequency: 'D'
+Provided train_data has 14 rows, 1 time series. Median time series length is 14 (min=14, max=14). 
+
+Provided data contains following columns:
+	target: 'target'
+
+AutoGluon will gauge predictive performance using evaluation metric: 'WQL'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+===================================================
+
+Starting training. Start time is 2026-07-20 16:03:21
+Models that will be trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos2', 'TemporalFusionTransformer']
+Training timeseries model SeasonalNaive. Training for up to 75.0s of the 599.9s of remaining time.
+	-0.4159       = Validation score (-WQL)
+	0.03    s     = Training runtime
+	0.04    s     = Validation (prediction) runtime
+Training timeseries model RecursiveTabular. Training for up to 85.7s of the 599.8s of remaining time.
+	-1.3566       = Validation score (-WQL)
+	1.66    s     = Training runtime
+	0.08    s     = Validation (prediction) runtime
+Training timeseries model DirectTabular. Training for up to 99.7s of the 598.0s of remaining time.
+	-0.3205       = Validation score (-WQL)
+	0.63    s     = Training runtime
+	0.08    s     = Validation (prediction) runtime
+Training timeseries model ETS. Training for up to 119.5s of the 597.3s of remaining time.
+	-0.2860       = Validation score (-WQL)
+	0.01    s     = Training runtime
+	0.02    s     = Validation (prediction) runtime
+Training timeseries model Theta. Training for up to 149.3s of the 597.2s of remaining time.
+	-0.3524       = Validation score (-WQL)
+	0.01    s     = Training runtime
+	0.02    s     = Validation (prediction) runtime
+Training timeseries model Chronos2. Training for up to 199.1s of the 597.2s of remaining time.
+	-0.2516       = Validation score (-WQL)
+	4.18    s     = Training runtime
+	0.12    s     = Validation (prediction) runtime
+Training timeseries model TemporalFusionTransformer. Training for up to 296.4s of the 592.9s of remaining time.
+	-0.5167       = Validation score (-WQL)
+	267.93  s     = Training runtime
+	0.08    s     = Validation (prediction) runtime
+Fitting 1 ensemble(s), in 1 layers.
+Training ensemble model WeightedEnsemble. Training for up to 324.7s.
+	Ensemble weights: {'Chronos2': 0.82, 'ETS': 0.18}
+	-0.2115       = Validation score (-WQL)
+	0.61    s     = Training runtime
+	0.13    s     = Validation (prediction) runtime
+Training complete. Models trained: ['SeasonalNaive', 'RecursiveTabular', 'DirectTabular', 'ETS', 'Theta', 'Chronos2', 'TemporalFusionTransformer', 'WeightedEnsemble']
+Total runtime: 276.16 s
+Best model: WeightedEnsemble
+Best model score: -0.2115
+Additional data provided, testing on additional data. Resulting leaderboard will be sorted according to test score (`score_test`).
+Model not specified in predict, will default to the model with the best validation score: WeightedEnsemble

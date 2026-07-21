@@ -12,6 +12,13 @@ import {
 } from "recharts";
 import type { ForecastSeries } from "@/lib/api";
 
+// The learned normal range for this signal, exactly as the backend computed it
+// (the reference period's own 10th–90th percentile). Passing it in is optional:
+// only the objectives that actually judge "has this drifted from its normal?"
+// have such a band, and a chart without one simply doesn't draw the lines rather
+// than inventing a threshold.
+export type NormalBand = { lo: number; hi: number };
+
 type ChartPoint = {
   timestamp: string;
   actual?: number;
@@ -45,7 +52,7 @@ function formatTick(ts: string): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:00`;
 }
 
-export function ForecastChart({ series }: { series: ForecastSeries }) {
+export function ForecastChart({ series, normal }: { series: ForecastSeries; normal?: NormalBand }) {
   const { data, forecastStart } = toChartData(series);
 
   return (
@@ -85,6 +92,24 @@ export function ForecastChart({ series }: { series: ForecastSeries }) {
               strokeDasharray="4 4"
               label={{ value: "forecast →", position: "insideTopRight", fontSize: 10, fill: "var(--text-faint)" }}
             />
+          )}
+          {normal && (
+            <>
+              <ReferenceLine
+                y={normal.hi}
+                stroke="var(--success)"
+                strokeDasharray="3 3"
+                strokeWidth={1.2}
+                label={{ value: "normal max", position: "insideTopLeft", fontSize: 9, fill: "var(--success)" }}
+              />
+              <ReferenceLine
+                y={normal.lo}
+                stroke="var(--success)"
+                strokeDasharray="3 3"
+                strokeWidth={1.2}
+                label={{ value: "normal min", position: "insideBottomLeft", fontSize: 9, fill: "var(--success)" }}
+              />
+            </>
           )}
           <Area
             dataKey="band"

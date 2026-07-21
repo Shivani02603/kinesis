@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Super Admin · Kinesis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body data-persona="superadmin" data-active="companies" data-title="Client companies"
+      data-subtitle="Every company using the Kinesis platform">
+  <div class="k-shell">
+    <div id="k-sidebar-mount"></div>
+    <div class="k-main">
+      <div id="k-topbar-mount"></div>
+      <div class="k-content scrollbar-thin" style="overflow-y:auto">
+
+        <!-- platform stats -->
+        <div class="grid cols-4 gap-3 mb-5">
+          <div class="k-card k-stat"><div class="lab">Client companies</div><div class="val">4</div><div class="sub">3 live · 1 onboarding</div></div>
+          <div class="k-card k-stat"><div class="lab">Machines under contract</div><div class="val">37</div><div class="sub">across all clients</div></div>
+          <div class="k-card k-stat tone-watch"><div class="lab">Pending requests</div><div class="val">2</div><div class="sub">structure changes to review</div></div>
+          <div class="k-card k-stat tone-ok"><div class="lab">Data health</div><div class="val">96%</div><div class="sub">connections reporting</div></div>
+        </div>
+
+        <!-- companies table -->
+        <div class="k-card k-section mb-5">
+          <div class="head">
+            <div>
+              <h3>Companies on the platform</h3>
+              <div class="subtitle">Open a company to enter its admin console, structure &amp; training, and data health.</div>
+            </div>
+            <a class="k-btn k-btn-primary" href="run-discovery.html"><span class="material-symbols-outlined" style="font-size:18px">add</span>Onboard new company</a>
+          </div>
+          <table class="k-table">
+            <thead><tr><th>Company</th><th>Industry</th><th>Plan</th><th>Machines</th><th>Data health</th><th>Graph version</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="font-semibold">Acme Steel Plant</td>
+                <td class="muted">Basic Metals</td>
+                <td><span class="k-badge k-badge-info">12-machine</span></td>
+                <td class="mono">12 / 12</td>
+                <td><span class="flex items-center gap-2"><span class="k-dot k-dot-ok"></span>Healthy</span></td>
+                <td class="mono muted">v3</td>
+                <td class="text-right"><a class="k-btn k-btn-outline" href="admin.html">Open <span class="material-symbols-outlined" style="font-size:16px">arrow_forward</span></a></td>
+              </tr>
+              <tr>
+                <td class="font-semibold">Nirmal Foods</td>
+                <td class="muted">Food Products</td>
+                <td><span class="k-badge k-badge-info">8-machine</span></td>
+                <td class="mono">8 / 8</td>
+                <td><span class="flex items-center gap-2"><span class="k-dot k-dot-watch"></span>1 sensor stale</span></td>
+                <td class="mono muted">v2</td>
+                <td class="text-right"><a class="k-btn k-btn-outline" href="admin.html">Open <span class="material-symbols-outlined" style="font-size:16px">arrow_forward</span></a></td>
+              </tr>
+              <tr>
+                <td class="font-semibold">Vaayu Pharma</td>
+                <td class="muted">Pharmaceuticals</td>
+                <td><span class="k-badge k-badge-info">17-machine</span></td>
+                <td class="mono">17 / 17</td>
+                <td><span class="flex items-center gap-2"><span class="k-dot k-dot-ok"></span>Healthy</span></td>
+                <td class="mono muted">v5</td>
+                <td class="text-right"><a class="k-btn k-btn-outline" href="admin.html">Open <span class="material-symbols-outlined" style="font-size:16px">arrow_forward</span></a></td>
+              </tr>
+              <tr style="opacity:.75">
+                <td class="font-semibold">Orbit Textiles</td>
+                <td class="muted">Textiles</td>
+                <td><span class="k-badge k-badge-neutral">Onboarding</span></td>
+                <td class="mono">— / 6</td>
+                <td><span class="flex items-center gap-2"><span class="k-dot k-dot-off"></span>Not yet live</span></td>
+                <td class="mono muted">draft</td>
+                <td class="text-right"><a class="k-btn k-btn-outline" href="run-discovery.html">Continue setup</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- structure requests -->
+        <div class="k-card k-section mb-5" id="requests">
+          <div class="head">
+            <div>
+              <h3>Structure-change requests</h3>
+              <div class="subtitle">Company admins can’t add machines themselves — they request, you approve. This is the billing &amp; graph-quality gate.</div>
+            </div>
+            <span class="k-badge k-badge-watch">2 pending</span>
+          </div>
+          <div class="space-y-3">
+            <div class="k-card p-4" style="box-shadow:none;background:var(--surface-2)">
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <span class="icon-tile" style="background:var(--warning-soft);color:var(--warning)"><span class="material-symbols-outlined">precision_manufacturing</span></span>
+                  <div>
+                    <div class="font-semibold text-sm">Acme Steel Plant — add machine “Quench Tank QT-2”</div>
+                    <div class="text-xs faint">Requested by R. Mehta (Company Admin) · 2 days ago · would take contract to 13 machines</div>
+                  </div>
+                </div>
+                <div class="flex gap-2">
+                  <button class="k-btn k-btn-outline">Review data</button>
+                  <button class="k-btn k-btn-primary">Approve &amp; train</button>
+                </div>
+              </div>
+            </div>
+            <div class="k-card p-4" style="box-shadow:none;background:var(--surface-2)">
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <span class="icon-tile" style="background:var(--warning-soft);color:var(--warning)"><span class="material-symbols-outlined">sensors</span></span>
+                  <div>
+                    <div class="font-semibold text-sm">Nirmal Foods — new vibration sensor on “Mixer M-3”</div>
+                    <div class="text-xs faint">Requested by S. Iyer (Company Admin) · 5 days ago · existing machine, no plan change</div>
+                  </div>
+                </div>
+                <div class="flex gap-2">
+                  <button class="k-btn k-btn-outline">Review data</button>
+                  <button class="k-btn k-btn-primary">Approve &amp; train</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="k-proto"><span class="material-symbols-outlined" style="font-size:15px">draw</span>Prototype · sample data for layout</div>
+  <script src="assets/shell.js"></script>
+</body>
+</html>

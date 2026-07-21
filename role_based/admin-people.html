@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>People &amp; roles · Kinesis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body data-persona="admin" data-active="users" data-title="People &amp; roles"
+      data-subtitle="Acme Steel Plant · who’s on the team">
+  <div class="k-shell">
+    <div id="k-sidebar-mount"></div>
+    <div class="k-main">
+      <div id="k-topbar-mount"></div>
+      <div class="k-content scrollbar-thin" style="overflow-y:auto">
+
+        <div class="k-card p-4 mb-5" style="background:var(--surface-2)">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined accent" style="font-size:22px">info</span>
+            <p class="text-xs muted" style="margin:0">
+              Everyone opens the <b>same</b> operational dashboard — a person’s job title just describes what they
+              act on. Some roles also <b>feed data</b> simply by doing their normal work (closing an alert, marking
+              a batch, entering an order).
+            </p>
+          </div>
+        </div>
+
+        <div class="grid cols-4 gap-3 mb-5">
+          <div class="k-card k-stat"><div class="lab">People</div><div class="val">9</div><div class="sub">on the team</div></div>
+          <div class="k-card k-stat tone-ok"><div class="lab">Active</div><div class="val">8</div><div class="sub">signed in this week</div></div>
+          <div class="k-card k-stat"><div class="lab">Feed data</div><div class="val">3</div><div class="sub">via daily work</div></div>
+          <div class="k-card k-stat"><div class="lab">Invited</div><div class="val">1</div><div class="sub">pending accept</div></div>
+        </div>
+
+        <div class="k-card k-section">
+          <div class="head">
+            <div><h3>Team</h3><div class="subtitle">Assign a person’s job — access to the one operational dashboard is the same for all.</div></div>
+            <button class="k-btn k-btn-primary"><span class="material-symbols-outlined" style="font-size:18px">person_add</span>Invite person</button>
+          </div>
+          <table class="k-table">
+            <thead><tr><th>Person</th><th>Email</th><th>Job</th><th>Acts on</th><th>Feeds data?</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="font-semibold">A. Kulkarni</td><td class="mono faint">a.kulkarni@acmesteel.com</td><td>Plant Head</td><td class="muted">All areas</td><td class="faint">—</td><td class="text-right"><a href="plant-head.html">view</a></td></tr>
+              <tr><td class="font-semibold">R. Mehta</td><td class="mono faint">r.mehta@acmesteel.com</td><td>Maintenance</td><td class="muted">Machine Health</td><td><span class="k-badge k-badge-ok">Failure log</span></td><td class="text-right"><a href="maintenance.html">view</a></td></tr>
+              <tr><td class="font-semibold">P. Nair</td><td class="mono faint">p.nair@acmesteel.com</td><td>Sales</td><td class="muted">Deliveries</td><td><span class="k-badge k-badge-ok">New orders</span></td><td class="text-right"><a href="sales.html">view</a></td></tr>
+              <tr><td class="font-semibold">S. Rao</td><td class="mono faint">s.rao@acmesteel.com</td><td>Planner</td><td class="muted">Production Plan</td><td class="faint">—</td><td class="text-right"><a href="plant-head.html">view</a></td></tr>
+              <tr><td class="font-semibold">M. Desai</td><td class="mono faint">m.desai@acmesteel.com</td><td>Quality Control</td><td class="muted">Quality</td><td><span class="k-badge k-badge-ok">Batch results</span></td><td class="text-right"><a href="plant-head.html">view</a></td></tr>
+              <tr><td class="font-semibold">K. Shah</td><td class="mono faint">k.shah@acmesteel.com</td><td>SCM / Inventory</td><td class="muted">Materials</td><td class="faint">—</td><td class="text-right"><a href="plant-head.html">view</a></td></tr>
+              <tr><td class="font-semibold">V. Menon</td><td class="mono faint">v.menon@acmesteel.com</td><td>Maintenance</td><td class="muted">Machine Health</td><td><span class="k-badge k-badge-ok">Failure log</span></td><td class="text-right"><a href="maintenance.html">view</a></td></tr>
+              <tr><td class="font-semibold">D. Joshi</td><td class="mono faint">d.joshi@acmesteel.com</td><td>Sales</td><td class="muted">Deliveries</td><td><span class="k-badge k-badge-ok">New orders</span></td><td class="text-right"><a href="sales.html">view</a></td></tr>
+              <tr style="opacity:.7"><td class="font-semibold">N. Rangan</td><td class="mono faint">n.rangan@acmesteel.com</td><td>Quality Control</td><td class="muted">Quality</td><td class="faint">—</td><td class="text-right"><span class="k-badge k-badge-neutral">Invited</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="k-proto"><span class="material-symbols-outlined" style="font-size:15px">draw</span>Prototype · sample data for layout</div>
+  <script src="assets/shell.js"></script>
+</body>
+</html>

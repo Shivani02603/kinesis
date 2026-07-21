@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Production Plan · Kinesis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+  <style>
+    /* toggle switch for the plan-settings strip */
+    .k-toggle { position:relative; width:2.25rem; height:1.25rem; flex:none; }
+    .k-toggle input { opacity:0; width:100%; height:100%; margin:0; position:absolute; inset:0; cursor:pointer; z-index:1; }
+    .k-toggle .track { position:absolute; inset:0; background:var(--border); border-radius:999px; transition:background .15s ease; }
+    .k-toggle input:checked + .track { background:var(--accent); }
+    .k-toggle .thumb { position:absolute; top:2px; left:2px; width:.95rem; height:.95rem; background:#fff; border-radius:50%; transition:transform .15s ease; box-shadow:0 1px 2px rgba(0,0,0,.25); }
+    .k-toggle input:checked ~ .thumb { transform:translateX(1rem); }
+
+    /* stat tiles with an inline breakdown line */
+    .stat-breakdown { display:flex; gap:.6rem; margin-top:.2rem; font-size:.625rem; }
+    .stat-breakdown b { font-variant-numeric:tabular-nums; }
+
+    /* toolbar */
+    .toolbar-tab { padding:.4rem .8rem; border-radius:var(--radius-sm); font-size:.8rem; font-weight:700; color:var(--text-muted); border:1px solid var(--border); background:var(--surface); }
+    .toolbar-tab.active { background:var(--accent-soft); color:var(--accent-hover); border-color:var(--accent-soft); }
+    .view-toggle { display:inline-flex; border:1px solid var(--border-strong); border-radius:var(--radius-sm); overflow:hidden; }
+    .view-toggle span { padding:.4rem .7rem; font-size:.75rem; font-weight:700; color:var(--text-muted); border-right:1px solid var(--border-strong); }
+    .view-toggle span:last-child { border-right:none; }
+    .view-toggle span.active { background:var(--accent); color:#fff; }
+    .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:2.1rem; height:2.1rem; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--surface); color:var(--text-muted); }
+
+    /* legend dots */
+    .leg-dot { width:.55rem; height:.55rem; border-radius:999px; display:inline-block; flex:none; }
+    .gap-1\.5 { gap:.375rem; }
+
+    /* work-center grid: label column + a date-based timeline column */
+    .wc-grid { display:grid; grid-template-columns: 210px 1fr; min-width:980px; }
+    .wc-grid > .wc-cell { padding:.55rem .75rem .55rem 0; border-bottom:1px solid var(--border); display:flex; flex-direction:column; justify-content:center; min-height:60px; }
+    .wc-grid > .tl-cell { position:relative; border-bottom:1px solid var(--border); min-height:60px; }
+    .wc-grid > .tl-head { position:relative; border-bottom:2px solid var(--border-strong); min-height:46px; }
+    .wc-grid > .last { border-bottom:none; }
+
+    .tick-day { position:absolute; top:.35rem; font-size:.68rem; font-weight:800; color:var(--text); white-space:nowrap; }
+    .tick-sub { position:absolute; top:1.5rem; font-size:.58rem; color:var(--text-faint); white-space:nowrap; }
+
+    .now-line { position:absolute; top:0; bottom:0; width:0; border-left:1.5px solid var(--accent); z-index:2; }
+    .now-tag { position:absolute; top:-1.3rem; left:0; transform:translateX(-50%); background:var(--accent); color:#fff;
+      font-size:.6rem; font-weight:700; padding:.12rem .4rem; border-radius:4px; white-space:nowrap; }
+
+    /* gantt blocks (machine-centric): color = product/state, not machine */
+    .gblock { position:absolute; top:7px; bottom:7px; border-radius:6px; padding:.28rem .4rem; overflow:hidden; font-size:.64rem; line-height:1.3; color:#fff; white-space:nowrap; text-overflow:ellipsis; }
+    .gblock .t1 { font-weight:800; overflow:hidden; text-overflow:ellipsis; }
+    .gblock .t2 { opacity:.92; font-size:.6rem; overflow:hidden; text-overflow:ellipsis; }
+    .gblock.sliver { padding:0; }
+    .gblock.rod   { background:#c0506a; }
+    .gblock.plate { background:#12879c; }
+    .gblock.coil  { background:#2f9e63; }
+    .gblock.setup, .gblock.changeover { background:#e0952c; color:#3a2500; align-items:center; justify-content:center; display:flex; text-align:center; }
+    .gblock.changeover { background:#c97a1a; color:#fff; }
+    .gblock.waiting { background:#c3aef2; color:#3a2a6b; align-items:center; justify-content:center; display:flex; text-align:center; }
+    .gblock.blocked {
+      background:repeating-linear-gradient(45deg, var(--danger-soft), var(--danger-soft) 4px, #fff 4px, #fff 8px);
+      border:1px dashed var(--danger); color:var(--danger); align-items:center; justify-content:center; display:flex; text-align:center;
+    }
+    .gblock.maintenance {
+      background:repeating-linear-gradient(45deg, #ecd3d3, #ecd3d3 4px, #fbf1f1 4px, #fbf1f1 8px);
+      border:1px dashed #9c5a5a; color:#7a3d3d; align-items:center; justify-content:center; display:flex; text-align:center;
+    }
+    .gblock.offshift {
+      background:repeating-linear-gradient(45deg, #e2e5ec, #e2e5ec 4px, #eef1f7 4px, #eef1f7 8px);
+      border:1px dashed var(--border-strong); color:var(--text-faint); align-items:center; justify-content:center; display:flex; text-align:center; z-index:0;
+    }
+
+    /* right sidebar cards */
+    .content-layout { display:grid; grid-template-columns: 1fr 300px; gap:1.25rem; align-items:start; }
+    @media (max-width:1200px) { .content-layout { grid-template-columns: 1fr; } }
+
+    .donut { width:100px; height:100px; border-radius:50%; position:relative; flex:none; }
+    .donut::after { content:""; position:absolute; inset:17%; border-radius:50%; background:var(--surface); }
+    .donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    .donut-center .n { font-size:1.1rem; font-weight:800; }
+    .donut-center .l { font-size:.5rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:.03em; }
+
+    .ck-row { display:flex; align-items:center; justify-content:space-between; padding:.5rem 0; border-bottom:1px solid var(--border); font-size:.8rem; }
+    .ck-row:last-child { border-bottom:none; padding-bottom:0; }
+    .ck-ok, .ck-off { display:flex; align-items:center; gap:.25rem; font-weight:700; font-size:.66rem; text-transform:uppercase; letter-spacing:.02em; }
+    .ck-ok { color:var(--success); }
+    .ck-off { color:var(--text-faint); }
+
+    .snap-row { display:flex; align-items:center; justify-content:space-between; padding:.4rem 0; font-size:.78rem; }
+    .snap-row span:first-child { color:var(--text-faint); }
+    .snap-row span:last-child { font-weight:700; }
+
+    /* recommendation rows */
+    .rec-row { display:flex; align-items:flex-start; gap:.85rem; padding:.9rem 0; border-bottom:1px solid var(--border); }
+    .rec-row:last-child { border-bottom:none; padding-bottom:0; }
+
+    .dense-table { width:100%; border-collapse:collapse; font-size:.72rem; white-space:nowrap; }
+    .dense-table th { text-align:left; font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--text-faint);
+      padding:.55rem .7rem .55rem 0; border-bottom:1px solid var(--border); }
+    .dense-table td { padding:.6rem .7rem .6rem 0; border-bottom:1px solid var(--border); }
+    .dense-table tr:last-child td { border-bottom:none; }
+  </style>
+</head>
+<body data-persona="plant_head" data-active="plan" data-title="Production Plan"
+      data-subtitle="Exact schedule from the solver — with real constraints, not just orders and machines">
+  <div class="k-shell">
+    <div id="k-sidebar-mount"></div>
+    <div class="k-main">
+      <div id="k-topbar-mount"></div>
+      <div class="k-content scrollbar-thin" style="overflow-y:auto">
+
+        <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+          <p class="text-xs faint" style="margin:0">Toggle all four settings below to see the fully-constrained plan — this switches between two precomputed scenarios, it isn't re-solving live.</p>
+          <div class="flex items-center gap-3">
+            <span class="text-xs faint">Last updated: 12:35 AM</span>
+            <button class="k-btn k-btn-primary"><span class="material-symbols-outlined" style="font-size:18px">autorenew</span>Re-plan now</button>
+          </div>
+        </div>
+
+        <!-- stat row: baseline -->
+        <div class="grid cols-5 gap-3 mb-3" id="stats-baseline" style="grid-template-columns:repeat(5,minmax(0,1fr))">
+          <div class="k-card k-stat">
+            <div class="lab">Orders in plan</div><div class="val">12</div>
+            <div class="stat-breakdown"><span class="ok">On time <b>10</b></span><span class="watch">At risk <b>2</b></span><span class="crit">Late <b>0</b></span></div>
+          </div>
+          <div class="k-card k-stat tone-ok">
+            <div class="lab">Plan coverage</div><div class="val">98%</div><div class="sub">order qty covered</div>
+            <div class="k-bar mt-2"><span style="width:98%"></span></div>
+          </div>
+          <div class="k-card k-stat"><div class="lab">Total output</div><div class="val">14,280 t</div><div class="sub">planned production</div></div>
+          <div class="k-card k-stat"><div class="lab">Plan duration</div><div class="val">4.2 days</div><div class="sub">15 Jul – 19 Jul</div></div>
+          <div class="k-card k-stat tone-ok"><div class="lab">Constraint check</div><div class="val" style="font-size:1.15rem">All good</div><div class="sub">no hard violations</div></div>
+        </div>
+
+        <!-- stat row: all constraints active -->
+        <div class="grid cols-5 gap-3 mb-3" id="stats-constrained" style="display:none; grid-template-columns:repeat(5,minmax(0,1fr))">
+          <div class="k-card k-stat">
+            <div class="lab">Orders in plan</div><div class="val">12</div>
+            <div class="stat-breakdown"><span class="ok">On time <b>8</b></span><span class="watch">At risk <b>3</b></span><span class="crit">Late <b>1</b></span></div>
+          </div>
+          <div class="k-card k-stat tone-ok">
+            <div class="lab">Plan coverage</div><div class="val">98%</div><div class="sub">order qty covered</div>
+            <div class="k-bar mt-2"><span style="width:98%"></span></div>
+          </div>
+          <div class="k-card k-stat"><div class="lab">Total output</div><div class="val">13,760 t</div><div class="sub">planned production</div></div>
+          <div class="k-card k-stat tone-watch"><div class="lab">Plan duration</div><div class="val">4.6 days</div><div class="sub">15 Jul – 19 Jul (nights respected)</div></div>
+          <div class="k-card k-stat tone-ok"><div class="lab">Constraint check</div><div class="val" style="font-size:1.15rem">All good</div><div class="sub">no hard violations</div></div>
+        </div>
+
+        <!-- plan settings: what constraints feed the solver -->
+        <div class="k-card k-section mb-5">
+          <div class="grid cols-4 gap-3">
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-semibold text-sm">Maintenance windows</span>
+                <label class="k-toggle"><input type="checkbox" id="pd-maint" checked onchange="updateScenario()" /><span class="track"></span><span class="thumb"></span></label>
+              </div>
+              <div class="text-xs faint">Live from Machine Health's forecast.</div>
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-semibold text-sm">Priority weighting</span>
+                <label class="k-toggle"><input type="checkbox" id="pd-priority" checked onchange="updateScenario()" /><span class="track"></span><span class="thumb"></span></label>
+              </div>
+              <div class="text-xs faint">Rush orders count more toward the objective.</div>
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-semibold text-sm">Shift calendar</span>
+                <label class="k-toggle"><input type="checkbox" id="pd-shift" onchange="updateScenario()" /><span class="track"></span><span class="thumb"></span></label>
+              </div>
+              <div class="text-xs faint">Not connected — assumes continuous running until on.</div>
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-semibold text-sm">Material gating</span>
+                <label class="k-toggle"><input type="checkbox" id="pd-material" onchange="updateScenario()" /><span class="track"></span><span class="thumb"></span></label>
+              </div>
+              <div class="text-xs faint">Not connected — needs a material-ready date per order.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="content-layout">
+          <!-- left: gantt + order table -->
+          <div>
+            <div class="k-card k-section mb-5">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-1">
+                <div class="flex items-center gap-3 flex-wrap">
+                  <h3 style="margin:0">Production Schedule (Plan Gantt)</h3>
+                  <span class="toolbar-tab active">Work Centers</span>
+                  <span class="toolbar-tab">Machines</span>
+                  <span class="toolbar-tab">Orders</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="view-toggle"><span class="active">Day</span><span>3 Days</span><span>Week</span></div>
+                  <button class="k-btn k-btn-outline"><span class="material-symbols-outlined" style="font-size:16px">filter_list</span>Filters</button>
+                  <span class="icon-btn"><span class="material-symbols-outlined" style="font-size:18px">more_vert</span></span>
+                </div>
+              </div>
+              <p class="text-xs muted mb-3">Every work center's machine-by-machine load, block by block — an exact plan from the solver, not a heuristic guess.</p>
+
+              <div class="flex flex-wrap gap-3 mb-3">
+                <span class="flex items-center gap-1.5 text-xs faint"><span class="leg-dot" style="background:#12879c"></span>Processing</span>
+                <span class="flex items-center gap-1.5 text-xs faint"><span class="leg-dot" style="background:#e0952c"></span>Setup</span>
+                <span class="flex items-center gap-1.5 text-xs faint"><span class="leg-dot" style="background:#c3aef2"></span>Waiting</span>
+                <span class="flex items-center gap-1.5 text-xs faint"><span class="leg-dot" style="background:var(--danger)"></span>Blocked</span>
+                <span class="flex items-center gap-1.5 text-xs faint"><span class="leg-dot" style="background:#9c5a5a"></span>Maintenance</span>
+                <span class="flex items-center gap-1.5 text-xs faint"><span class="leg-dot" style="background:#c97a1a"></span>Changeover</span>
+              </div>
+
+              <!-- baseline gantt -->
+              <div id="gantt-baseline" style="overflow-x:auto">
+                <div class="wc-grid">
+                  <div class="wc-cell tl-head" style="border-bottom:2px solid var(--border-strong)"><span class="font-bold text-xs faint uppercase">Work centers</span></div>
+                  <div class="tl-head">
+                    <span class="tick-day" style="left:0%">15 JUL</span><span class="tick-sub" style="left:0%">06:00</span><span class="tick-sub" style="left:6.25%">12:00</span><span class="tick-sub" style="left:12.5%">18:00</span>
+                    <span class="tick-day" style="left:25%">16 JUL</span>
+                    <span class="tick-day" style="left:50%">17 JUL</span>
+                    <span class="tick-day" style="left:75%">18 JUL</span>
+                    <div class="now-line" style="left:33%"><span class="now-tag">16:25 PM</span></div>
+                  </div>
+
+                  <div class="wc-cell">
+                    <div class="flex items-center justify-between mb-1"><span class="flex items-center gap-2 font-semibold text-sm"><span class="material-symbols-outlined" style="font-size:18px">local_fire_department</span>Furnace 3</span><span class="text-xs font-bold accent">84%</span></div>
+                    <div class="k-bar"><span style="width:84%"></span></div>
+                  </div>
+                  <div class="tl-cell">
+                    <div class="gblock rod" style="left:0%;width:13%"><div class="t1">SO-2214</div><div class="t2">Hardened Rod · 4,200t</div></div>
+                    <div class="gblock setup sliver" style="left:13%;width:2%" title="Setup · 45m"></div>
+                    <div class="gblock maintenance" style="left:15%;width:6%">Maintenance</div>
+                    <div class="gblock plate" style="left:21%;width:17%"><div class="t1">SO-2217</div><div class="t2">Tempered Plate · 6,100t</div></div>
+                    <div class="gblock changeover sliver" style="left:38%;width:2%" title="Changeover · 30m"></div>
+                    <div class="gblock coil" style="left:40%;width:12%"><div class="t1">SO-2219</div><div class="t2">Annealed Coil · 3,800t</div></div>
+                    <div class="gblock rod" style="left:52%;width:14%"><div class="t1">SO-2221</div><div class="t2">Hardened Rod · 5,000t</div></div>
+                    <div class="now-line" style="left:33%"></div>
+                  </div>
+
+                  <div class="wc-cell">
+                    <div class="flex items-center justify-between mb-1"><span class="flex items-center gap-2 font-semibold text-sm"><span class="material-symbols-outlined" style="font-size:18px">ac_unit</span>Cooling Conveyor</span><span class="text-xs font-bold accent">78%</span></div>
+                    <div class="k-bar"><span style="width:78%"></span></div>
+                  </div>
+                  <div class="tl-cell">
+                    <div class="gblock rod" style="left:13%;width:10%"><div class="t1">SO-2214</div></div>
+                    <div class="gblock waiting" style="left:23%;width:6%" title="Waiting on Inspection Stn">Waiting</div>
+                    <div class="gblock plate" style="left:38%;width:18%"><div class="t1">SO-2217</div></div>
+                    <div class="gblock coil" style="left:52%;width:10%"><div class="t1">SO-2219</div></div>
+                    <div class="gblock rod" style="left:66%;width:12%"><div class="t1">SO-2221</div></div>
+                    <div class="now-line" style="left:33%"></div>
+                  </div>
+
+                  <div class="wc-cell">
+                    <div class="flex items-center justify-between mb-1"><span class="flex items-center gap-2 font-semibold text-sm"><span class="material-symbols-outlined" style="font-size:18px">verified</span>Inspection Stn</span><span class="text-xs font-bold accent">65%</span></div>
+                    <div class="k-bar"><span style="width:65%"></span></div>
+                  </div>
+                  <div class="tl-cell">
+                    <div class="gblock rod" style="left:29%;width:6%"><div class="t1">SO-2214</div></div>
+                    <div class="gblock plate" style="left:56%;width:7%"><div class="t1">SO-2217</div></div>
+                    <div class="gblock waiting" style="left:63%;width:3%" title="Waiting on Packaging PKG-2">Waiting</div>
+                    <div class="gblock coil" style="left:66%;width:6%"><div class="t1">SO-2219</div></div>
+                    <div class="gblock rod" style="left:78%;width:6%"><div class="t1">SO-2221</div></div>
+                    <div class="now-line" style="left:33%"></div>
+                  </div>
+
+                  <div class="wc-cell last">
+                    <div class="flex items-center justify-between mb-1"><span class="flex items-center gap-2 font-semibold text-sm"><span class="material-symbols-outlined" style="font-size:18px">inventory_2</span>Packaging PKG-2</span><span class="text-xs font-bold accent">72%</span></div>
+                    <div class="k-bar"><span style="width:72%"></span></div>
+                  </div>
+                  <div class="tl-cell last">
+                    <div class="gblock waiting" style="left:0%;width:4%" title="Waiting on incoming material">Waiting</div>
+                    <div class="gblock rod" style="left:35%;width:4%"><div class="t1">SO-2214</div></div>
+                    <div class="gblock plate" style="left:66%;width:4%"><div class="t1">SO-2217</div></div>
+                    <div class="gblock setup sliver" style="left:70%;width:1%" title="Setup · 30m"></div>
+                    <div class="gblock coil" style="left:71%;width:5%"><div class="t1">SO-2219</div></div>
+                    <div class="gblock rod" style="left:84%;width:6%"><div class="t1">SO-2221</div></div>
+                    <div class="now-line" style="left:33%"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- constrained gantt -->
+              <div id="gantt-constrained" style="display:none; overflow-x:auto">
+                <div class="wc-grid">
+                  <div class="wc-cell tl-head" style="border-bottom:2px solid var(--border-strong)"><span class="font-bold text-xs faint uppercase">Work centers</span></div>
+                  <div class="tl-head">
+                    <span class="tick-day" style="left:0%">15 JUL</span><span class="tick-sub" style="left:0%">06:00</span><span class="tick-sub" style="left:6.25%">12:00</span><span class="tick-sub" style="left:12.5%">18:00</span>
+                    <span class="tick-day" style="left:25%">16 JUL</span>
+                    <span class="tick-day" style="left:50%">17 JUL</span>
+                    <span class="tick-day" style="left:75%">18 JUL</span>
+                    <div class="now-line" style="left:33%"><span class="now-tag">16:25 PM</span></div>
+                  </div>
+
+                  <div class="wc-cell">
+                    <div class="flex items-center justify-between mb-1"><span class="flex items-center gap-2 font-semibold text-sm"><span class="material-symbols-outlined" style="font-size:18px">local_fire_department</span>Furnace 3</span><span class="text-xs font-bold accent">78%</span></div>
+                    <div class="k-bar"><span style="width:78%"></span></div>
+                  </div>
+                  <div class="tl-cell">
+                    <div class="gblock rod" style="left:0%;width:13%"><div class="t1">SO-2214</div><div class="t2">Hardened Rod · 4,200t</div></div>
+                    <div class="gblock setup sliver" style="left:13%;width:2%" title="Setup · 45m"></div>
+                    <div class="gblock maintenance" style="left:15%;width:6%">Maintenance</div>
+                    <div class="gblock offshift" style="left:21%;width:8%">Off-shift</div>
+                    <div class="gblock plate" style="left:29%;width:17%"><div class="t1">SO-2217</div><div class="t2">Tempered Plate · 6,100t</div></div>
+                    <div class="gblock changeover sliver" style="left:46%;width:2%" title="Changeover · 30m"></div>
+                    <div class="gblock offshift" style="left:48%;width:8%">Off-shift</div>
+                    <div class="gblock coil" style="left:56%;width:12%"><div class="t1">SO-2219</div><div class="t2">Annealed Coil · 3,800t</div></div>
+                    <div class="gblock rod" style="left:68%;width:14%"><div class="t1">SO-2221</div><div class="t2">Hardened Rod · 5,000t</div></div>
+                    <div class="now-line" style="left:33%"></div>
+                  </div>
+
+                  <div class="wc-cell">
+                    <div class="flex items-center justify-between mb-1"><span class="flex items-center gap-2 font-semibold text-sm"><span class="material-symbols-outlined" style="font-size:18px">ac_unit</span>Cooling Conveyor</span><span class="text-xs font-bold accent">71%</span></div>
+                    <div class="k-bar"><span style="width:71%"></span></div>
+                  </div>
+                  <div class="tl-cell">
+                    <div class="gblock rod" style="left:13%;width:8%"><div class="t1">SO-2214</div></div>
+                    <div class="gblock offshift" style="left:21%;width:8%">Off-shift</div>
+                    <div class="gblock rod" style="left:29%;width:2%"><div class="t1">SO-2214</div></div>
+                    <div class="gblock waiting" style="left:31%;width:4%" title="Waiting on Inspection Stn">Waiting</div>
+                    <div class="gblock plate" style="left:46%;width:2%"><div class="t1">SO-2217</div></div>
+                    <div class="gblock offshift" style="left:48%;width:8%">Off-shift</div>
+                    <div class="gblock plate" style="left:56%;width:14%"><div class="t1">SO-2217</div></div>
+                    <div class="gblock coil" style="left:70%;width:8%"><div class="t1">SO-2219</div></div>
+                    <div class="gblock rod" style="left:82%;width:12%"><div class="t1">SO-2221</div></div>
+                    <div class="now-line" style="left:33%"></div>
+                  </div>
+
+                  <div class="wc-cell">
+                    <div class="flex items-center justify-between mb-1"><span class="flex items-center gap-2 font-semibold text-sm"><span class="material-symbols-outlined" style="font-size:18px">verified</span>Inspection Stn</span><span class="text-xs font-bold accent">60%</span></div>
+                    <div class="k-bar"><span style="width:60%"></span></div>
+                  </div>
+                  <div class="tl-cell">
+                    <div class="gblock rod" style="left:35%;width:6%"><div class="t1">SO-2214</div></div>
+                    <div class="gblock plate" style="left:70%;width:7%"><div class="t1">SO-2217</div></div>
+                    <div class="gblock waiting" style="left:77%;width:3%" title="Waiting on Packaging PKG-2">Waiting</div>
+                    <div class="gblock coil" style="left:80%;width:6%"><div class="t1">SO-2219</div></div>
+                    <div class="gblock rod" style="left:94%;width:5%"><div class="t1">SO-2221</div></div>
+                    <div class="now-line" style="left:33%"></div>
+                  </div>
+
+                  <div class="wc-cell last">
+                    <div class="flex items-center justify-between mb-1"><span class="flex items-center gap-2 font-semibold text-sm"><span class="material-symbols-outlined" style="font-size:18px">inventory_2</span>Packaging PKG-2</span><span class="text-xs font-bold accent">66%</span></div>
+                    <div class="k-bar"><span style="width:66%"></span></div>
+                  </div>
+                  <div class="tl-cell last">
+                    <div class="gblock waiting" style="left:0%;width:6%" title="Waiting on incoming material">Waiting</div>
+                    <div class="gblock rod" style="left:41%;width:4%"><div class="t1">SO-2214</div></div>
+                    <div class="gblock plate" style="left:80%;width:4%"><div class="t1">SO-2217</div></div>
+                    <div class="gblock setup sliver" style="left:84%;width:1%" title="Setup · 30m"></div>
+                    <div class="gblock coil" style="left:86%;width:4%"><div class="t1">SO-2219</div></div>
+                    <div class="gblock rod" style="left:98%;width:2%"><div class="t1">SO-2221</div></div>
+                    <div class="now-line" style="left:33%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- order plan overview -->
+            <div class="k-card k-section">
+              <div class="head"><div><h3>Order Plan Overview</h3><div class="subtitle">Same plan, order-by-order — product, dates, and how far along each one is.</div></div></div>
+              <div style="overflow-x:auto">
+                <table class="dense-table" id="orders-baseline">
+                  <thead><tr><th>Order</th><th>Product</th><th>Qty (t)</th><th>Due date</th><th>Priority</th><th>Status</th><th>Start</th><th>Finish</th><th>Duration</th><th>Late by</th><th>Work centers</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td class="mono font-semibold">SO-2214</td><td>Hardened Rod</td><td class="mono">4,200</td><td class="mono">18 Jul, 17:00</td><td class="faint">Normal</td>
+                      <td><span class="k-badge k-badge-ok">On Time</span></td><td class="mono">15 Jul, 06:00</td><td class="mono">16 Jul, 10:20</td><td class="mono">1d 4h 20m</td><td class="faint">–</td>
+                      <td class="mono faint">F3→CC→INS→PKG</td>
+                    </tr>
+                    <tr>
+                      <td class="mono font-semibold">SO-2217</td><td>Tempered Plate</td><td class="mono">6,100</td><td class="mono">16 Jul, 17:00</td><td><span class="k-badge k-badge-crit">Rush</span></td>
+                      <td><span class="k-badge k-badge-ok">On Time</span></td><td class="mono">15 Jul, 12:50</td><td class="mono">16 Jul, 22:10</td><td class="mono">1d 9h 20m</td><td class="faint">–</td>
+                      <td class="mono faint">F3→CC→INS→PKG</td>
+                    </tr>
+                    <tr>
+                      <td class="mono font-semibold">SO-2219</td><td>Annealed Coil</td><td class="mono">3,800</td><td class="mono">22 Jul, 12:00</td><td class="faint">Normal</td>
+                      <td><span class="k-badge k-badge-ok">On Time</span></td><td class="mono">16 Jul, 22:10</td><td class="mono">17 Jul, 18:35</td><td class="mono">19h 25m</td><td class="faint">–</td>
+                      <td class="mono faint">F3→CC→INS→PKG</td>
+                    </tr>
+                    <tr>
+                      <td class="mono font-semibold">SO-2221</td><td>Hardened Rod</td><td class="mono">5,000</td><td class="mono">17 Jul, 20:00</td><td class="faint">Normal</td>
+                      <td><span class="k-badge k-badge-watch">At Risk</span></td><td class="mono">17 Jul, 18:35</td><td class="mono">19 Jul, 06:45</td><td class="mono">1d 12h 10m</td><td class="crit font-semibold">3h 20m</td>
+                      <td class="mono faint">F3→CC→INS→PKG</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <table class="dense-table" id="orders-constrained" style="display:none">
+                  <thead><tr><th>Order</th><th>Product</th><th>Qty (t)</th><th>Due date</th><th>Priority</th><th>Status</th><th>Start</th><th>Finish</th><th>Duration</th><th>Late by</th><th>Work centers</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td class="mono font-semibold">SO-2214</td><td>Hardened Rod</td><td class="mono">4,200</td><td class="mono">18 Jul, 17:00</td><td class="faint">Normal</td>
+                      <td><span class="k-badge k-badge-ok">On Time</span></td><td class="mono">15 Jul, 06:00</td><td class="mono">16 Jul, 15:40</td><td class="mono">1d 9h 40m</td><td class="faint">–</td>
+                      <td class="mono faint">F3→CC→INS→PKG</td>
+                    </tr>
+                    <tr>
+                      <td class="mono font-semibold">SO-2217</td><td>Tempered Plate</td><td class="mono">6,100</td><td class="mono">16 Jul, 17:00</td><td><span class="k-badge k-badge-crit">Rush</span></td>
+                      <td><span class="k-badge k-badge-ok">On Time</span></td><td class="mono">15 Jul, 18:50</td><td class="mono">17 Jul, 08:10</td><td class="mono">1d 13h 20m</td><td class="faint">–</td>
+                      <td class="mono faint">F3→CC→INS→PKG</td>
+                    </tr>
+                    <tr>
+                      <td class="mono font-semibold">SO-2219</td><td>Annealed Coil</td><td class="mono">3,800</td><td class="mono">22 Jul, 12:00</td><td class="faint">Normal</td>
+                      <td><span class="k-badge k-badge-ok">On Time</span></td><td class="mono">17 Jul, 08:10</td><td class="mono">18 Jul, 06:35</td><td class="mono">22h 25m</td><td class="faint">–</td>
+                      <td class="mono faint">F3→CC→INS→PKG</td>
+                    </tr>
+                    <tr>
+                      <td class="mono font-semibold">SO-2221</td><td>Hardened Rod</td><td class="mono">5,000</td><td class="mono">17 Jul, 20:00</td><td class="faint">Normal</td>
+                      <td><span class="k-badge k-badge-crit">Late</span></td><td class="mono">18 Jul, 06:35</td><td class="mono">19 Jul, 20:50</td><td class="mono">1d 14h 15m</td><td class="crit font-semibold">1d 0h 50m</td>
+                      <td class="mono faint">F3→CC→INS→PKG</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="flex items-center justify-between mt-3">
+                <a href="#" class="text-xs font-semibold">View all orders →</a>
+                <button class="k-btn k-btn-outline"><span class="material-symbols-outlined" style="font-size:18px">download</span>Export plan</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- right: sidebar -->
+          <div>
+            <!-- baseline sidebar -->
+            <div id="sidebar-baseline">
+              <div class="k-card k-section mb-4">
+                <h3 class="mb-2">Plan Snapshot</h3>
+                <div class="snap-row"><span>Scenario</span><span>Baseline (2 of 4)</span></div>
+                <div class="snap-row"><span>Optimized for</span><span>Min. Late Orders</span></div>
+                <div class="snap-row"><span>Solver</span><span class="mono">CP-SAT</span></div>
+                <div class="snap-row"><span>Generated on</span><span class="mono" style="font-weight:600">15 Jul, 10:25 AM</span></div>
+                <div class="snap-row"><span>Objective score</span><span>1,286 (95%)</span></div>
+                <button class="k-btn k-btn-outline w-full mt-2" style="justify-content:center">View scenario details</button>
+              </div>
+
+              <div class="k-card k-section mb-4">
+                <h3 class="mb-3">Orders by Status</h3>
+                <div class="flex items-center gap-4">
+                  <div class="donut" style="background:conic-gradient(var(--success) 0% 83%, var(--warning) 83% 100%)">
+                    <div class="donut-center"><span class="n">12</span><span class="l">Total</span></div>
+                  </div>
+                  <div class="space-y-2 text-xs flex-1">
+                    <div class="flex items-center gap-2"><span class="k-dot k-dot-ok"></span><span class="muted flex-1">On time</span><span class="mono font-semibold">10 (83%)</span></div>
+                    <div class="flex items-center gap-2"><span class="k-dot k-dot-watch"></span><span class="muted flex-1">At risk</span><span class="mono font-semibold">2 (17%)</span></div>
+                    <div class="flex items-center gap-2"><span class="k-dot k-dot-crit"></span><span class="muted flex-1">Late</span><span class="mono font-semibold">0 (0%)</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="k-card k-section">
+                <h3 class="mb-2">Key Constraints</h3>
+                <div class="ck-row"><span>Machine Capacity</span><span class="ck-ok"><span class="material-symbols-outlined" style="font-size:16px">check_circle</span>OK</span></div>
+                <div class="ck-row"><span>Material Availability</span><span class="ck-off"><span class="material-symbols-outlined" style="font-size:16px">radio_button_unchecked</span>Off</span></div>
+                <div class="ck-row"><span>Maintenance Windows</span><span class="ck-ok"><span class="material-symbols-outlined" style="font-size:16px">check_circle</span>OK</span></div>
+                <div class="ck-row"><span>Precedence Rules</span><span class="ck-ok"><span class="material-symbols-outlined" style="font-size:16px">check_circle</span>OK</span></div>
+                <div class="ck-row"><span>Changeover Times</span><span class="ck-ok"><span class="material-symbols-outlined" style="font-size:16px">check_circle</span>OK</span></div>
+                <div class="ck-row"><span>No Hard Violations</span><span class="ck-ok"><span class="material-symbols-outlined" style="font-size:16px">check_circle</span>OK</span></div>
+                <button class="k-btn k-btn-outline w-full mt-3" style="justify-content:center">View constraint report</button>
+              </div>
+            </div>
+
+            <!-- constrained sidebar -->
+            <div id="sidebar-constrained" style="display:none">
+              <div class="k-card k-section mb-4">
+                <h3 class="mb-2">Plan Snapshot</h3>
+                <div class="snap-row"><span>Scenario</span><span>All constraints active</span></div>
+                <div class="snap-row"><span>Optimized for</span><span>Min. Late Orders</span></div>
+                <div class="snap-row"><span>Solver</span><span class="mono">CP-SAT</span></div>
+                <div class="snap-row"><span>Generated on</span><span class="mono" style="font-weight:600">15 Jul, 10:25 AM</span></div>
+                <div class="snap-row"><span>Objective score</span><span>2,140 (89%)</span></div>
+                <button class="k-btn k-btn-outline w-full mt-2" style="justify-content:center">View scenario details</button>
+              </div>
+
+              <div class="k-card k-section mb-4">
+                <h3 class="mb-3">Orders by Status</h3>
+                <div class="flex items-center gap-4">
+                  <div class="donut" style="background:conic-gradient(var(--success) 0% 67%, var(--warning) 67% 92%, var(--danger) 92% 100%)">
+                    <div class="donut-center"><span class="n">12</span><span class="l">Total</span></div>
+                  </div>
+                  <div class="space-y-2 text-xs flex-1">
+                    <div class="flex items-center gap-2"><span class="k-dot k-dot-ok"></span><span class="muted flex-1">On time</span><span class="mono font-semibold">8 (67%)</span></div>
+                    <div class="flex items-center gap-2"><span class="k-dot k-dot-watch"></span><span class="muted flex-1">At risk</span><span class="mono font-semibold">3 (25%)</span></div>
+                    <div class="flex items-center gap-2"><span class="k-dot k-dot-crit"></span><span class="muted flex-1">Late</span><span class="mono font-semibold">1 (8%)</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="k-card k-section">
+                <h3 class="mb-2">Key Constraints</h3>
+                <div class="ck-row"><span>Machine Capacity</span><span class="ck-ok"><span class="material-symbols-outlined" style="font-size:16px">check_circle</span>OK</span></div>
+                <div class="ck-row"><span>Material Availability</span><span class="ck-ok"><span class="material-symbols-outlined" style="font-size:16px">check_circle</span>OK</span></div>
+                <div class="ck-row"><span>Maintenance Windows</span><span class="ck-ok"><span class="material-symbols-outlined" style="font-size:16px">check_circle</span>OK</span></div>
+                <div class="ck-row"><span>Precedence Rules</span><span class="ck-ok"><span class="material-symbols-outlined" style="font-size:16px">check_circle</span>OK</span></div>
+                <div class="ck-row"><span>Changeover Times</span><span class="ck-ok"><span class="material-symbols-outlined" style="font-size:16px">check_circle</span>OK</span></div>
+                <div class="ck-row"><span>No Hard Violations</span><span class="ck-ok"><span class="material-symbols-outlined" style="font-size:16px">check_circle</span>OK</span></div>
+                <button class="k-btn k-btn-outline w-full mt-3" style="justify-content:center">View constraint report</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- smart recommendations: kept separate from the dense plan view above -->
+        <div class="k-card k-section mt-5">
+          <div class="head">
+            <div><h3>Smart recommendations</h3>
+              <div class="subtitle">Each one comes from re-solving the same CP-SAT model with one constraint relaxed or reordered — not a separate rule engine.</div>
+            </div>
+            <span class="k-badge k-badge-info">3 found</span>
+          </div>
+
+          <div id="recs-baseline">
+            <div class="rec-row">
+              <span class="icon-tile" style="background:var(--info-soft);color:var(--info)"><span class="material-symbols-outlined">bolt</span></span>
+              <div style="flex:1">
+                <div class="font-semibold text-sm">Move Furnace 3's maintenance window 2h later</div>
+                <div class="text-xs muted mt-1">Re-solved with this one change: SO-2217 starts earlier and the whole Furnace 3 queue tightens by ~2h.</div>
+              </div>
+              <span class="k-badge k-badge-ok" style="align-self:center">saves ~2h on Furnace 3</span>
+            </div>
+            <div class="rec-row">
+              <span class="icon-tile" style="background:var(--info-soft);color:var(--info)"><span class="material-symbols-outlined">swap_horiz</span></span>
+              <div style="flex:1">
+                <div class="font-semibold text-sm">Run SO-2219 ahead of SO-2221 wherever both wait on Packaging</div>
+                <div class="text-xs muted mt-1">Re-solved with the queue swapped: SO-2221's lateness risk drops without moving any other order's due date.</div>
+              </div>
+              <span class="k-badge k-badge-info" style="align-self:center">de-risks SO-2221</span>
+            </div>
+            <div class="rec-row">
+              <span class="icon-tile" style="background:var(--info-soft);color:var(--info)"><span class="material-symbols-outlined">schedule</span></span>
+              <div style="flex:1">
+                <div class="font-semibold text-sm">SO-2219 has 4 days of slack before its due date</div>
+                <div class="text-xs muted mt-1">Lowest-risk order to bump if Furnace 3 needs unplanned maintenance — absorbing a delay here still finishes on time.</div>
+              </div>
+              <span class="k-badge k-badge-neutral" style="align-self:center">buffer, not urgent</span>
+            </div>
+          </div>
+
+          <div id="recs-constrained" style="display:none">
+            <div class="rec-row">
+              <span class="icon-tile" style="background:var(--info-soft);color:var(--info)"><span class="material-symbols-outlined">local_shipping</span></span>
+              <div style="flex:1">
+                <div class="font-semibold text-sm">SO-2221 waits on material right at the start</div>
+                <div class="text-xs muted mt-1">Re-solved with the material arriving 6h earlier: SO-2221 moves from <b class="crit">Late</b> to <b class="watch">At Risk</b>, closer to on time.</div>
+              </div>
+              <span class="k-badge k-badge-ok" style="align-self:center">cuts lateness ~1 day</span>
+            </div>
+            <div class="rec-row">
+              <span class="icon-tile" style="background:var(--info-soft);color:var(--info)"><span class="material-symbols-outlined">nightlight</span></span>
+              <div style="flex:1">
+                <div class="font-semibold text-sm">Furnace 3's changeover lands right at a night shift-change</div>
+                <div class="text-xs muted mt-1">Re-solved doing the changeover 1h earlier: it clears before the night pause instead of straddling it.</div>
+              </div>
+              <span class="k-badge k-badge-info" style="align-self:center">saves ~8h wall-clock</span>
+            </div>
+            <div class="rec-row">
+              <span class="icon-tile" style="background:var(--info-soft);color:var(--info)"><span class="material-symbols-outlined">merge</span></span>
+              <div style="flex:1">
+                <div class="font-semibold text-sm">Furnace 3's maintenance window sits only 4h before the first night pause</div>
+                <div class="text-xs muted mt-1">Re-solved with maintenance moved onto the night pause: Furnace 3 gets a full extra working day back with zero added downtime.</div>
+              </div>
+              <span class="k-badge k-badge-ok" style="align-self:center">up to 1 day recovered</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-xs faint mono mt-6">checked just now · run c14e0b9 · solver: OR-Tools CP-SAT (exact, not heuristic)</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="k-proto"><span class="material-symbols-outlined" style="font-size:15px">draw</span>Prototype · sample data for layout</div>
+  <script src="assets/shell.js"></script>
+  <script>
+    function updateScenario() {
+      var ids = ["pd-maint", "pd-priority", "pd-shift", "pd-material"];
+      var all = ids.every(function (id) { return document.getElementById(id).checked; });
+
+      document.getElementById("stats-baseline").style.display = all ? "none" : "grid";
+      document.getElementById("stats-constrained").style.display = all ? "grid" : "none";
+      document.getElementById("gantt-baseline").style.display = all ? "none" : "block";
+      document.getElementById("gantt-constrained").style.display = all ? "block" : "none";
+      document.getElementById("orders-baseline").style.display = all ? "none" : "table";
+      document.getElementById("orders-constrained").style.display = all ? "table" : "none";
+      document.getElementById("sidebar-baseline").style.display = all ? "none" : "block";
+      document.getElementById("sidebar-constrained").style.display = all ? "block" : "none";
+      document.getElementById("recs-baseline").style.display = all ? "none" : "block";
+      document.getElementById("recs-constrained").style.display = all ? "block" : "none";
+    }
+  </script>
+</body>
+</html>

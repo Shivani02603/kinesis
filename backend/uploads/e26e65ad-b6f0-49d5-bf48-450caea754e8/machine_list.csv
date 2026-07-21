@@ -1,5 +1,0 @@
-asset_id,name,description
-AST-01,Furnace 3,Primary batch furnace used for heat treatment of steel components
-AST-02,Cooling Conveyor,Conveyor belt that transfers parts from the furnace toward inspection for air cooling
-AST-03,Inspection Station,Manual and automated dimensional inspection station
-AST-04,Packaging Line PKG-2,Final packaging line for finished parts

@@ -1,0 +1,6 @@
+tag_id,description,unit
+FCE3_VIB,Furnace FCE-3 condition-monitoring vibration,mm/s
+CC1_VIB,Cooling Conveyor CC-1 condition-monitoring vibration,mm/s
+IS2_VIB,Inspection Station IS-2 condition-monitoring vibration,mm/s
+PKG4_VIB,Packaging Line PKG-4 condition-monitoring vibration,mm/s
+HARDNESS_REJECT_RATE,Percent of batches rejected for out-of-spec Rockwell hardness,%
