@@ -353,6 +353,37 @@ function readableParams(result: TrainingResult): string[] {
   return out;
 }
 
+// When the winner is a WeightedEnsemble, AutoGluon gives us its real component
+// weights — showing them explains WHY the ensemble won (it blends the best
+// models). Weights are normalised to percentages for reading; the underlying
+// numbers are AutoGluon's own, nothing invented. Renders nothing when the winner
+// isn't an ensemble (composition is null).
+function EnsembleComposition({ composition }: { composition?: { model: string; weight: number }[] | null }) {
+  if (!composition || composition.length === 0) return null;
+  const total = composition.reduce((s, c) => s + c.weight, 0) || 1;
+  return (
+    <div className="pt-2 border-t border-[var(--border)]">
+      <p className="text-xs font-medium text-[var(--text)] mb-1.5">
+        This ensemble blends {composition.length} model{composition.length === 1 ? "" : "s"}:
+      </p>
+      <div className="space-y-1">
+        {composition.map((c) => {
+          const pct = Math.round((c.weight / total) * 100);
+          return (
+            <div key={c.model} className="flex items-center gap-2 text-xs">
+              <span className="w-40 truncate text-[var(--text-muted)]">{c.model}</span>
+              <div className="flex-1 h-2 bg-white/60 rounded-full overflow-hidden">
+                <span className="block h-full rounded-full bg-[var(--success)]" style={{ width: `${pct}%` }} />
+              </div>
+              <span className="w-9 text-right font-mono text-[var(--text-muted)]">{pct}%</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function WhyTechnique({ run }: { run: TrainingRun }) {
   const result = run.result;
   const [open, setOpen] = useState(false);
@@ -445,12 +476,13 @@ function ObjectiveDetail({ run }: { run: TrainingRun }) {
       <WhyTechnique run={run} />
 
       {result.why_model_won && (
-        <div className="card p-4 space-y-1.5" style={{ background: "var(--success-soft)", borderColor: "var(--success)" }}>
+        <div className="card p-4 space-y-2" style={{ background: "var(--success-soft)", borderColor: "var(--success)" }}>
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[var(--success)] text-[18px]">emoji_events</span>
             <h3 className="text-sm font-semibold">Winning model: {result.best_model}</h3>
           </div>
           <p className="text-xs text-[var(--text-muted)]">{result.why_model_won}</p>
+          <EnsembleComposition composition={result.ensemble_composition} />
         </div>
       )}
 
