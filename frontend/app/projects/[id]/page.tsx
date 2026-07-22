@@ -135,7 +135,7 @@ export default function ProjectPage() {
         }}
       />
     <div className={`flex-1 flex flex-col h-dvh transition-[margin] duration-200 ${sidebarOpen ? "md:ml-64" : "md:ml-0"}`}>
-      <header className="border-b border-[var(--border)] px-4 md:px-6 py-3 flex items-center justify-between shrink-0 gap-3">
+      <header className="border-b border-[var(--border)] px-4 md:px-6 py-3 flex items-center justify-between shrink-0 gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           {!sidebarOpen && (
             <button

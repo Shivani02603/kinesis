@@ -308,7 +308,7 @@ function DetailHead({ card }: { card: DashboardCard }) {
   const showFacts = card.status === "info" || card.status === "error" || card.status === "pending";
   return (
     <header className="mb-5">
-      <div className="flex items-center gap-3 mb-1.5">
+      <div className="flex items-center gap-3 mb-1.5 flex-wrap">
         <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-faint)]">{OBJECTIVE_QUESTION[card.objective]}</span>
         <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full ${st.chip}`}>
           {st.label}

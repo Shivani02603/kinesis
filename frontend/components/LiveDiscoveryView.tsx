@@ -70,7 +70,7 @@ export function LiveDiscoveryView({
   const failed = progress.status === "failed";
 
   return (
-    <div className="p-6 flex flex-col gap-4 h-full max-w-[1800px] mx-auto min-h-0">
+    <div className="p-4 md:p-6 flex flex-col gap-4 h-full max-w-[1800px] mx-auto min-h-0 overflow-y-auto scrollbar-thin">
       <div className="card p-4 flex-none">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
@@ -96,9 +96,9 @@ export function LiveDiscoveryView({
           </div>
         </div>
 
-        <div className="flex mt-4">
+        <div className="flex flex-wrap gap-y-2 mt-4">
           {STEPS.map((label, i) => (
-            <div key={label} className="flex-1 flex items-center gap-2 px-2 py-2">
+            <div key={label} className="w-1/2 sm:w-auto sm:flex-1 flex items-center gap-2 px-2 py-2">
               <span
                 className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold border-[1.5px] flex-none ${
                   i < progress.step

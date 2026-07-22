@@ -280,8 +280,8 @@ function OverviewTab({
 
         {latest ? (
           <div className="bg-[var(--surface-2)] rounded-lg p-4 space-y-1">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-sm font-semibold">{latest.description}</div>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-sm font-semibold min-w-0">{latest.description}</div>
               <span className={`badge ${latest.status === "approved" ? "badge-confirmed" : latest.status === "rejected" ? "badge-rejected" : "badge-pending"}`}>
                 {latest.status === "pending" ? "Pending Kinesis" : latest.status}
               </span>
