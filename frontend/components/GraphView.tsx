@@ -5,7 +5,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   useReactFlow,
   useNodesInitialized,
   type Node,
@@ -134,12 +133,6 @@ export function GraphView({ graph }: { graph: GraphData }) {
       <FitViewOnGraphChange nodeCount={nodes.length} edgeCount={edges.length} />
       <Background color="#d3e4fe" gap={20} />
       <Controls showInteractive={false} />
-      <MiniMap
-        pannable
-        zoomable
-        maskColor="rgba(248,249,255,0.7)"
-        style={{ background: "#ffffff", border: "1px solid #e3ddd1" }}
-      />
     </ReactFlow>
   );
 }
