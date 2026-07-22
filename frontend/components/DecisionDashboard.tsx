@@ -400,7 +400,7 @@ function MachineCoverage({ graph, monitoredNames }: { graph: GraphData; monitore
   return (
     <SectionCard
       title="Machines on this line"
-      subtitle={`${assets.length} machines in your process graph — ${coveredCount} have real sensor data uploaded. The rest appear here once their readings are provided.`}
+      subtitle={`${coveredCount} of ${assets.length} have sensor data uploaded`}
     >
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {assets.map((a) => {
@@ -491,7 +491,7 @@ function MachineHealthPage({ card, graph }: { card: DashboardCard; graph: GraphD
         )}
       </div>
       {alerts.length > 0 && (
-        <SectionCard title="Recent deviations detected" subtitle="Real recorded readings that fell outside a signal's own learned normal range — not a scheduled maintenance plan, which this data can't yet support.">
+        <SectionCard title="Recent deviations detected" subtitle="Readings that fell outside a signal's own learned normal range.">
           <AlertList alerts={alerts} />
         </SectionCard>
       )}
@@ -570,7 +570,7 @@ function QualityPage({ card }: { card: DashboardCard }) {
         )}
       </div>
       {alerts.length > 0 && (
-        <SectionCard title="Recent quality alerts" subtitle="Real recorded readings outside the learned normal range — not a fabricated incident log.">
+        <SectionCard title="Recent quality alerts" subtitle="Readings outside the learned normal range.">
           <AlertList alerts={alerts} />
         </SectionCard>
       )}
@@ -677,7 +677,7 @@ function DemandPage({ card }: { card: DashboardCard }) {
               })}
             </div>
           </SectionCard>
-          <SectionCard title="Demand insights" subtitle="Computed from this forecast — every line traces to the numbers above.">
+          <SectionCard title="Demand insights">
             <ul className="space-y-2">
               {card.facts.map((f, i) => (
                 <li key={i} className="flex items-start gap-2 text-xs text-[var(--text-muted)]">
@@ -731,7 +731,7 @@ function QuoteInbox({ projectId }: { projectId: string }) {
 
   if (error) {
     return (
-      <SectionCard title="Quote a new order" subtitle="Get an expected delivery time for an order that hasn't been placed yet.">
+      <SectionCard title="Quote a new order">
         <p className="text-sm text-[var(--danger)]">{error}</p>
       </SectionCard>
     );
@@ -740,7 +740,7 @@ function QuoteInbox({ projectId }: { projectId: string }) {
 
   if (status.status === "untrained" || status.status === "failed") {
     return (
-      <SectionCard title="Quote a new order" subtitle="Get an expected delivery time for an order that hasn't been placed yet, before it's in your system.">
+      <SectionCard title="Quote a new order">
         {status.status === "failed" && <p className="text-sm text-[var(--danger)] mb-3">{status.error}</p>}
         <button
           disabled={training}
@@ -765,7 +765,7 @@ function QuoteInbox({ projectId }: { projectId: string }) {
 
   if (status.status === "pending") {
     return (
-      <SectionCard title="Quote a new order" subtitle="Get an expected delivery time for an order that hasn't been placed yet.">
+      <SectionCard title="Quote a new order">
         <div className="flex items-center gap-3">
           <span className="material-symbols-outlined animate-spin text-[var(--accent)]">progress_activity</span>
           <p className="text-sm text-[var(--text-muted)]">Setting up quoting from your order history — this updates automatically.</p>
@@ -783,10 +783,7 @@ function QuoteInbox({ projectId }: { projectId: string }) {
   const allRequired = dateField ? [...fields, dateField] : fields;
 
   return (
-    <SectionCard
-      title="Quote a new order"
-      subtitle="Enter the details of an order that hasn't been placed yet — the estimate is computed the same way as everything else here, from your own completed orders."
-    >
+    <SectionCard title="Quote a new order">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
         {dateField && (
           <div>
@@ -937,7 +934,7 @@ function DeliveriesPage({ card, projectId }: { card: DashboardCard; projectId: s
       {importance.length > 0 && (
         <SectionCard
           title="What affects our delivery time?"
-          subtitle="Relative influence of each factor, learned by the model from your own completed orders."
+          subtitle="Relative influence of each factor."
         >
           <div className="space-y-2.5">
             {importance.map((f) => {
@@ -979,14 +976,14 @@ function InventorySettingsForm({ material, projectId, onSaved }: { material: str
           <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1">Units on hand today</label>
           <input
             value={onHand} onChange={(e) => setOnHand(e.target.value)} type="number"
-            className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm" placeholder="e.g. 5200"
+            className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm"
           />
         </div>
         <div>
           <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1">Supplier lead time (days)</label>
           <input
             value={leadTime} onChange={(e) => setLeadTime(e.target.value)} type="number"
-            className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm" placeholder="e.g. 4"
+            className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm"
           />
         </div>
       </div>
@@ -1031,7 +1028,7 @@ function MaterialsPage({ card, projectId, onSettingsSaved }: { card: DashboardCa
     <div className="space-y-4">
       <StatRow stats={stats} />
       {items.length > 0 && (
-        <SectionCard title="Material stock status" subtitle="Usage forecast from your consumption log; stock and lead times are the real numbers you entered.">
+        <SectionCard title="Material stock status">
           <div className="overflow-x-auto -mx-5 px-5">
             <table className="w-full text-sm">
               <thead>
@@ -1408,7 +1405,7 @@ function PriorityWeightSettingsForm({
             <input
               value={weights[c] ?? ""} onChange={(e) => setWeights((w) => ({ ...w, [c]: e.target.value }))}
               type="number" min="1" step="1"
-              className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm" placeholder="e.g. 1"
+              className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm"
             />
           </div>
         ))}
@@ -1586,7 +1583,6 @@ function ProductionPlanPage({ card, projectId, onReplan }: { card: DashboardCard
         <div className="space-y-4 min-w-0">
           <SectionCard
             title="Production schedule"
-            subtitle="Every work center's real machine-by-machine load — an exact plan from the solver, not a heuristic guess."
             action={
               <div className="text-right">
                 <button
@@ -1642,10 +1638,7 @@ function ProductionPlanPage({ card, projectId, onReplan }: { card: DashboardCard
         </div>
       </div>
       {data.recommendations && data.recommendations.length > 0 && (
-        <SectionCard
-          title="Smart recommendations"
-          subtitle="Each one comes from re-solving the same CP-SAT model with one real change, or a fact read straight from this solve — never a canned rule."
-        >
+        <SectionCard title="Smart recommendations">
           <RecommendationsList recommendations={data.recommendations} />
         </SectionCard>
       )}
@@ -1713,7 +1706,7 @@ function InsightStrip({ cards }: { cards: DashboardCard[] }) {
     .slice(0, 4);
   if (ranked.length === 0) return null;
   return (
-    <SectionCard title="Today's insight" subtitle="Straight from the latest checks — click an area in the sidebar for the full picture.">
+    <SectionCard title="Today's insight" subtitle="Click an area in the sidebar for the full picture.">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {ranked.map((c) => {
         const st = STATUS_STYLE[c.status] ?? STATUS_STYLE.info;

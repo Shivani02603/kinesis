@@ -77,11 +77,11 @@ export default function CompanyAdminPage() {
     { label: "Operational dashboard", icon: "dashboard", onClick: () => router.push(`/projects/${projectId}/dashboard`) },
   ];
 
-  const titles: Record<Tab, { title: string; subtitle: string }> = {
-    overview: { title: "Company console", subtitle: `${project.name} · you manage data & people, not structure` },
-    connections: { title: "Data connections", subtitle: "Where every signal's routine data comes from." },
-    people: { title: "People & roles", subtitle: `${project.name} · who's on the team` },
-    graph: { title: "Process map", subtitle: `${project.name} · confirmed factory graph ${project.latest_version ? `v${project.latest_version}` : "(not yet confirmed)"}` },
+  const titles: Record<Tab, { title: string; subtitle?: string }> = {
+    overview: { title: "Company console" },
+    connections: { title: "Data connections" },
+    people: { title: "People & roles" },
+    graph: { title: "Process map", subtitle: project.latest_version ? `v${project.latest_version}` : "Not yet confirmed" },
   };
 
   return (
@@ -254,7 +254,7 @@ function OverviewTab({
             <textarea
               className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white"
               rows={3}
-              placeholder="Describe what changed on the floor (e.g. added Quench Tank QT-2)…"
+              placeholder="Describe what changed on the floor…"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
@@ -525,7 +525,7 @@ function PeopleTab({ projectId, people, onChanged }: { projectId: string; people
           />
           <input
             className="border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white"
-            placeholder="Job title (e.g. Maintenance)"
+            placeholder="Job title"
             value={jobTitle}
             onChange={(e) => setJobTitle(e.target.value)}
           />

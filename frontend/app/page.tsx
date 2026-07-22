@@ -137,11 +137,6 @@ export default function SuperAdminHome() {
       userEmail={user.email}
       onLogout={handleLogout}
       title={view === "companies" ? "Client companies" : "Structure-change requests"}
-      subtitle={
-        view === "companies"
-          ? "Every company using the Kinesis platform."
-          : "Raised by a Company Admin when something changed on the floor."
-      }
     >
       {error && <div className="bg-white rounded-xl border border-[var(--danger)] p-4 mb-6 text-sm text-[var(--danger)]">{error}</div>}
 
@@ -185,13 +180,13 @@ export default function SuperAdminHome() {
             <form onSubmit={handleCreate} className="grid grid-cols-3 gap-2 mb-5 bg-[var(--surface-2)] rounded-lg p-3">
               <input
                 className="border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white"
-                placeholder="Company name (e.g. Acme Steel Plant)"
+                placeholder="Company name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
               <input
                 className="border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white"
-                placeholder="Industry (e.g. Basic Metals)"
+                placeholder="Industry"
                 value={industry}
                 onChange={(e) => setIndustry(e.target.value)}
               />
