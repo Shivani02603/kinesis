@@ -120,7 +120,7 @@ export function LiveDiscoveryView({
         </div>
       </div>
 
-      <div className="grid gap-4 flex-1 min-h-0" style={{ gridTemplateColumns: "380px 1fr" }}>
+      <div className="grid gap-4 flex-1 min-h-0 grid-cols-1 grid-rows-[280px_1fr] md:grid-cols-[380px_1fr] md:grid-rows-none">
         <div className="card p-4 flex flex-col min-h-0">
           <div className="flex items-center justify-between mb-2 gap-2 flex-none">
             <div>

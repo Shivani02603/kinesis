@@ -874,7 +874,7 @@ export function ComputationPanel({
       </div>
       {trainAllMsg && <p className="text-xs text-[var(--text-muted)]">{trainAllMsg}</p>}
 
-      <div className="grid gap-4" style={{ gridTemplateColumns: "300px 1fr", alignItems: "start" }}>
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-[300px_1fr] items-start">
         <div className="card p-3 space-y-1">
           <div className="px-1 pb-1">
             <h3 className="text-sm font-bold">What&apos;s being built</h3>

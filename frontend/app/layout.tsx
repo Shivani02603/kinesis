@@ -31,7 +31,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="h-screen flex flex-col overflow-hidden">{children}</body>
+      <body className="h-dvh flex flex-col overflow-hidden">{children}</body>
     </html>
   );
 }

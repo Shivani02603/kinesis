@@ -176,7 +176,7 @@ export default function SuperAdminHome() {
           </div>
 
           {showOnboard && (
-            <form onSubmit={handleCreate} className="grid grid-cols-3 gap-2 mb-5 bg-[var(--surface-2)] rounded-lg p-3">
+            <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-5 bg-[var(--surface-2)] rounded-lg p-3">
               <input
                 className="border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white"
                 placeholder="Company name"
@@ -198,7 +198,7 @@ export default function SuperAdminHome() {
                 onChange={(e) => setMachineCapacity(e.target.value)}
               />
 
-              <div className="col-span-3 text-[11px] font-bold uppercase tracking-wide text-[var(--text-faint)] pt-1 border-t border-[var(--border)] mt-1">
+              <div className="col-span-1 sm:col-span-3 text-[11px] font-bold uppercase tracking-wide text-[var(--text-faint)] pt-1 border-t border-[var(--border)] mt-1">
                 First Company Admin — so they can log in once this is onboarded
               </div>
               <input
@@ -226,7 +226,7 @@ export default function SuperAdminHome() {
 
               <button
                 type="submit"
-                className="btn btn-primary col-span-3"
+                className="btn btn-primary col-span-1 sm:col-span-3"
                 disabled={creating || !name.trim() || !adminEmail.trim() || !adminPassword}
               >
                 {creating ? "Onboarding…" : "Create company & admin, start discovery"}

@@ -205,7 +205,7 @@ function Sidebar({
   const byObjective = new Map(cards.map((c) => [c.objective, c]));
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen w-64 bg-[var(--surface-2)] flex flex-col py-6 border-r border-[var(--border)] z-30 transition-transform duration-200 ${
+      className={`fixed left-0 top-0 h-dvh w-64 bg-[var(--surface-2)] flex flex-col py-6 border-r border-[var(--border)] z-30 transition-transform duration-200 ${
         open ? "translate-x-0" : "-translate-x-full"
       }`}
     >
@@ -283,8 +283,8 @@ function Sidebar({
 function SectionCard({ title, subtitle, children, action }: { title: string; subtitle?: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-5">
-      <div className="flex items-start justify-between mb-3">
-        <div>
+      <div className="flex items-start justify-between gap-2 flex-wrap mb-3">
+        <div className="min-w-0">
           <h3 className="text-sm font-bold text-[var(--text)]">{title}</h3>
           {subtitle && <p className="text-xs text-[var(--text-muted)] mt-0.5">{subtitle}</p>}
         </div>
@@ -1897,7 +1897,7 @@ export function DecisionDashboard({ projectId, projectName }: { projectId: strin
   const title = selected ? NAV_LABEL[selected] ?? "Overview" : "Overview";
 
   return (
-    <div className="h-screen bg-[var(--bg)] overflow-hidden">
+    <div className="h-dvh bg-[var(--bg)] overflow-hidden">
       {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-20 md:hidden" onClick={() => setSidebarOpen(false)} />}
       <Sidebar
         projectId={projectId}
@@ -1911,7 +1911,7 @@ export function DecisionDashboard({ projectId, projectName }: { projectId: strin
           if (window.matchMedia("(max-width: 767px)").matches) setSidebarOpen(false);
         }}
       />
-      <main className={`h-screen overflow-y-auto scrollbar-thin px-4 md:px-10 py-6 transition-[margin] duration-200 ${sidebarOpen ? "md:ml-64" : "md:ml-0"}`}>
+      <main className={`h-dvh overflow-y-auto scrollbar-thin px-4 md:px-10 py-6 transition-[margin] duration-200 ${sidebarOpen ? "md:ml-64" : "md:ml-0"}`}>
         <TopBar
           projectName={projectName}
           title={title}

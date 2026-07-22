@@ -118,7 +118,7 @@ export default function ProjectPage() {
   ];
 
   return (
-    <div className="h-screen bg-[var(--bg)] overflow-hidden">
+    <div className="h-dvh bg-[var(--bg)] overflow-hidden">
       {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-20 md:hidden" onClick={() => setSidebarOpen(false)} />}
       <TierSidebar
         scopeName={project.name}
@@ -134,7 +134,7 @@ export default function ProjectPage() {
           router.replace("/login");
         }}
       />
-    <div className={`flex-1 flex flex-col h-screen transition-[margin] duration-200 ${sidebarOpen ? "md:ml-64" : "md:ml-0"}`}>
+    <div className={`flex-1 flex flex-col h-dvh transition-[margin] duration-200 ${sidebarOpen ? "md:ml-64" : "md:ml-0"}`}>
       <header className="border-b border-[var(--border)] px-4 md:px-6 py-3 flex items-center justify-between shrink-0 gap-3">
         <div className="flex items-center gap-3 min-w-0">
           {!sidebarOpen && (
@@ -196,13 +196,13 @@ export default function ProjectPage() {
           onStarted={() => setShowLiveDiscovery(true)}
         />
       ) : (
-        <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex flex-col md:flex-row min-h-0">
           {/* Sources/review/versions are about building the structure — none of it applies
               once you're on the training tab, so it isn't shown there at all. */}
           {mainTab === "graph" && (leftCollapsed ? (
             <button
               onClick={() => setLeftCollapsed(false)}
-              className="shrink-0 w-10 border-r border-[var(--border)] flex flex-col items-center gap-2 py-3 hover:bg-[var(--surface-2)] transition-colors"
+              className="shrink-0 w-full md:w-10 border-b md:border-b-0 md:border-r border-[var(--border)] flex flex-row md:flex-col items-center justify-center md:justify-start gap-2 py-2 md:py-3 hover:bg-[var(--surface-2)] transition-colors"
               title="Show sources & review"
             >
               <span className="material-symbols-outlined text-[20px] text-[var(--text-muted)]">chevron_right</span>
@@ -214,7 +214,7 @@ export default function ProjectPage() {
               )}
             </button>
           ) : (
-            <aside className="w-96 shrink-0 border-r border-[var(--border)] p-4 overflow-y-auto scrollbar-thin">
+            <aside className="w-full md:w-96 shrink-0 max-h-[45vh] md:max-h-none border-b md:border-b-0 md:border-r border-[var(--border)] p-4 overflow-y-auto scrollbar-thin">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs font-bold uppercase tracking-wide text-[var(--text-faint)]">Sources &amp; review</span>
                 <button

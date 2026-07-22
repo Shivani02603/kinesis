@@ -42,7 +42,7 @@ export function TierSidebar({
 }) {
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen w-64 bg-[var(--surface-2)] flex flex-col py-6 border-r border-[var(--border)] z-30 transition-transform duration-200 ${
+      className={`fixed left-0 top-0 h-dvh w-64 bg-[var(--surface-2)] flex flex-col py-6 border-r border-[var(--border)] z-30 transition-transform duration-200 ${
         open ? "translate-x-0" : "-translate-x-full"
       }`}
     >
@@ -150,7 +150,7 @@ export function AdminShell({
   }, []);
 
   return (
-    <div className="h-screen bg-[var(--bg)] overflow-hidden">
+    <div className="h-dvh bg-[var(--bg)] overflow-hidden">
       {open && <div className="fixed inset-0 bg-black/40 z-20 md:hidden" onClick={() => setOpen(false)} />}
       <TierSidebar
         scopeName={scopeName}
@@ -165,7 +165,7 @@ export function AdminShell({
         }}
       />
 
-      <main className={`h-screen flex flex-col transition-[margin] duration-200 ${open ? "md:ml-64" : "md:ml-0"}`}>
+      <main className={`h-dvh flex flex-col transition-[margin] duration-200 ${open ? "md:ml-64" : "md:ml-0"}`}>
         <div className="flex items-center gap-3 px-4 md:px-10 py-6 flex-wrap justify-between">
           <div className="flex items-center gap-3 min-w-0">
             {!open && (
