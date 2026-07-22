@@ -114,10 +114,10 @@ export function AdminShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[var(--bg)]">
+    <div className="h-screen bg-[var(--bg)]">
       <TierSidebar tierLabel={tierLabel} scopeName={scopeName} nav={nav} footer={footer} userEmail={userEmail} onLogout={onLogout} />
 
-      <main className="md:ml-64 min-h-screen flex flex-col">
+      <main className="md:ml-64 h-screen flex flex-col">
         <div className="flex items-center justify-between gap-3 px-6 md:px-10 py-6 flex-wrap">
           <div>
             <h1 className="text-xl font-bold text-[var(--text)]">{title}</h1>
@@ -131,7 +131,7 @@ export function AdminShell({
             {headerAction}
           </div>
         </div>
-        <div className="flex-1 px-6 md:px-10 pb-10 overflow-y-auto scrollbar-thin">{children}</div>
+        <div className="flex-1 min-h-0 px-6 md:px-10 pb-10 overflow-y-auto scrollbar-thin">{children}</div>
       </main>
     </div>
   );
