@@ -340,7 +340,7 @@ def summarize_inventory(run: dict, settings: dict[str, str]) -> Card:
         return Card(
             objective="inventory", status="info",
             headline=f"Enter current stock and supplier lead time to get reorder dates for {len(items)} material(s).",
-            facts=["These are real facts only you know — the system has no way to guess them."],
+            facts=[],
             data={"series": series, "items": items, "needs_settings": True},
         )
 
@@ -384,7 +384,7 @@ def summarize_scheduling(run: dict) -> Card:
     return Card(
         objective="scheduling", status=status, headline=headline,
         facts=[f"Everything finishes within {result.get('makespan_hours')} hours.",
-               f"Plan verified optimal by {result.get('params', {}).get('solver', 'the solver')} — not a heuristic guess."],
+               f"Plan verified optimal by {result.get('params', {}).get('solver', 'the solver')}."],
         data=result,
         actions=["Share with floor team"],
     )

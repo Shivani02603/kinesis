@@ -125,7 +125,6 @@ export function LiveDiscoveryView({
           <div className="flex items-center justify-between mb-2 gap-2 flex-none">
             <div>
               <h3 className="text-sm font-bold">Live activity</h3>
-              <p className="text-xs text-[var(--text-faint)]">Every step is shown as it happens — nothing hidden.</p>
             </div>
             {progress.status === "running" && <span className="badge badge-info flex-none">Running</span>}
           </div>
@@ -145,7 +144,6 @@ export function LiveDiscoveryView({
         <div className="card flex flex-col min-h-0">
           <div className="p-3 border-b border-[var(--border)] flex-none">
             <h3 className="text-sm font-bold">Process map — assembling</h3>
-            <p className="text-xs text-[var(--text-faint)]">Each box appears the moment the system discovers it.</p>
           </div>
           <div className="flex-1 min-h-0">
             <GraphView graph={graph} />

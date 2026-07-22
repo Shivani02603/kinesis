@@ -858,13 +858,10 @@ export function ComputationPanel({
   }
 
   return (
-    <div className="p-6 max-w-[1600px] space-y-4 overflow-y-auto h-full scrollbar-thin">
+    <div className="p-6 space-y-4 overflow-y-auto h-full scrollbar-thin">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-base font-semibold">Computation</h1>
-          <p className="text-xs text-[var(--text-faint)]">
-            One dashboard for every objective — feasibility and trained results, side by side.
-          </p>
         </div>
         <div className="flex items-center gap-2 flex-none">
           {hasConfirmedVersion && <TimeBudgetControl projectId={projectId} />}
@@ -881,7 +878,6 @@ export function ComputationPanel({
         <div className="card p-3 space-y-1">
           <div className="px-1 pb-1">
             <h3 className="text-sm font-bold">What&apos;s being built</h3>
-            <p className="text-xs text-[var(--text-faint)]">Click an objective to see its detail.</p>
           </div>
           {OBJECTIVES.map((o) => (
             <ObjectiveSection

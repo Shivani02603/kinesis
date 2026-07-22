@@ -147,15 +147,13 @@ body {
 .badge-info { background: var(--info-soft); color: var(--info); }
 .badge-neutral { background: var(--surface-2); color: var(--text-muted); }
 
+/* Scrolling still works with the mouse wheel, trackpad, and keyboard — this
+   only hides the bar itself, since Windows renders a classic scrollbar (with
+   arrow buttons) for some browser/OS setting combinations that clashes with
+   our thin custom one instead of respecting it. */
+.scrollbar-thin {
+  scrollbar-width: none; /* Firefox */
+}
 .scrollbar-thin::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 999px;
-  opacity: 0.4;
-}
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
+  display: none; /* Chrome, Edge, Safari */
 }

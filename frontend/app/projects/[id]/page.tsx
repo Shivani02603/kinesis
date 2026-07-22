@@ -36,6 +36,13 @@ export default function ProjectPage() {
   const [mainTab, setMainTab] = useState<"graph" | "computation">("graph");
   const [showLiveDiscovery, setShowLiveDiscovery] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    // One-time environment check, not a value React itself owns.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (window.matchMedia("(max-width: 767px)").matches) setSidebarOpen(false);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -111,20 +118,35 @@ export default function ProjectPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--bg)]">
+    <div className="h-screen bg-[var(--bg)] overflow-hidden">
+      {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-20 md:hidden" onClick={() => setSidebarOpen(false)} />}
       <TierSidebar
-        tierLabel="Tier 1 · Platform"
         scopeName={project.name}
         nav={nav}
         userEmail={user.email}
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen((o) => !o)}
+        onNavigate={() => {
+          if (window.matchMedia("(max-width: 767px)").matches) setSidebarOpen(false);
+        }}
         onLogout={() => {
           clearToken();
           router.replace("/login");
         }}
       />
-    <div className="md:ml-64 flex-1 flex flex-col h-screen">
-      <header className="border-b border-[var(--border)] px-6 py-3 flex items-center justify-between shrink-0">
-        <div className="min-w-0">
+    <div className={`flex-1 flex flex-col h-screen transition-[margin] duration-200 ${sidebarOpen ? "md:ml-64" : "md:ml-0"}`}>
+      <header className="border-b border-[var(--border)] px-4 md:px-6 py-3 flex items-center justify-between shrink-0 gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          {!sidebarOpen && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="flex-none inline-flex items-center justify-center w-9 h-9 rounded-lg border border-[var(--border)] bg-white text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+              aria-label="Open menu"
+            >
+              <span className="material-symbols-outlined text-[20px]">menu</span>
+            </button>
+          )}
+          <div className="min-w-0">
           <h1 className="text-sm font-semibold truncate">{project.name} — Structure &amp; Training</h1>
           <p className="text-xs text-[var(--text-faint)]">
             {graph.nodes.length === 0
@@ -133,6 +155,7 @@ export default function ProjectPage() {
               ? `Confirmed version ${versions[0].version_number} — ${new Date(versions[0].confirmed_at).toLocaleString()}`
               : "Not yet confirmed"}
           </p>
+          </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           {reviewItems.length > 0 && (

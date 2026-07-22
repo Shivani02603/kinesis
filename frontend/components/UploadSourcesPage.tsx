@@ -74,7 +74,7 @@ export function UploadSourcesPage({
   const unprocessedCount = files.filter((f) => !f.processed).length;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto relative">
+    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin relative">
       <div
         className="absolute inset-0 pointer-events-none"
         style={{

@@ -86,7 +86,6 @@ export default function CompanyAdminPage() {
 
   return (
     <AdminShell
-      tierLabel="Tier 2 · Company"
       scopeName={project.name}
       nav={nav}
       footer={footer}
@@ -170,15 +169,6 @@ function OverviewTab({
 
   return (
     <div className="space-y-5">
-      <div className="bg-[var(--surface-2)] rounded-xl p-4 flex items-center gap-3">
-        <span className="material-symbols-outlined text-[var(--accent)] text-[22px]">info</span>
-        <p className="text-xs text-[var(--text-muted)] m-0">
-          As Company Admin you keep the <b>data flowing</b> and the <b>right people</b> in the right roles. Changing the
-          factory&apos;s structure (new machines, re-training the graph) goes to Kinesis as a request — that keeps your
-          plan scope and graph accuracy honest.
-        </p>
-      </div>
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <AdminStat label="People" value={String(people.length)} sub="across the team" />
         <AdminStat
@@ -203,7 +193,7 @@ function OverviewTab({
                 <div className="text-xs text-[var(--text-faint)]">not yet set up</div>
               </div>
             </div>
-            <p className="text-xs text-[var(--text-muted)] mb-2">Where every signal&apos;s routine data comes from — connected or role-fed.</p>
+            <p className="text-xs text-[var(--text-muted)] mb-2">Connect your factory&apos;s signal data.</p>
             <span className="text-xs text-[var(--accent)] font-semibold">Open →</span>
           </button>
           <button onClick={() => onNavigate("people")} className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-4 text-left">
@@ -216,7 +206,7 @@ function OverviewTab({
                 <div className="text-xs text-[var(--text-faint)]">{people.length} people</div>
               </div>
             </div>
-            <p className="text-xs text-[var(--text-muted)] mb-2">Who sees the operational dashboard and who feeds data through their work.</p>
+            <p className="text-xs text-[var(--text-muted)] mb-2">Manage your team and their access.</p>
             <span className="text-xs text-[var(--accent)] font-semibold">Open →</span>
           </button>
           <button onClick={() => onNavigate("graph")} className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-4 text-left">
@@ -229,7 +219,7 @@ function OverviewTab({
                 <div className="text-xs text-[var(--text-faint)]">{project.asset_count ?? 0} machines</div>
               </div>
             </div>
-            <p className="text-xs text-[var(--text-muted)] mb-2">Your confirmed factory graph (read-only) — the full picture.</p>
+            <p className="text-xs text-[var(--text-muted)] mb-2">View your confirmed factory graph.</p>
             <span className="text-xs text-[var(--accent)] font-semibold">Open →</span>
           </button>
         </div>
@@ -239,9 +229,6 @@ function OverviewTab({
         <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
           <div>
             <h3 className="text-sm font-extrabold">Need a structure change?</h3>
-            <p className="text-xs text-[var(--text-muted)] mt-0.5">
-              New machine, new sensor, or a process step changed — you request, Kinesis reviews &amp; trains it.
-            </p>
           </div>
           <button className="btn btn-primary" onClick={() => setShowRequestForm((s) => !s)}>
             <span className="material-symbols-outlined text-[18px]">add</span>
@@ -371,20 +358,10 @@ function ConnectionsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-5">
-      <div className="bg-[var(--surface-2)] rounded-xl p-4 flex items-center gap-3">
-        <span className="material-symbols-outlined text-[var(--accent)] text-[22px]">cable</span>
-        <p className="text-xs text-[var(--text-muted)] m-0">
-          Connect the factory&apos;s data source (its sensor database / historian). Kinesis pulls only the new
-          readings each time and retrains on them, so predictions keep moving forward without re-uploading anything.
-        </p>
-      </div>
-
       <div className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-5">
         <h3 className="text-sm font-extrabold mb-1">Source connection</h3>
         <p className="text-xs text-[var(--text-muted)] mb-3">
-          The data source&apos;s base URL (the factory data simulator, or a real ERP/historian with the same API).
-          The simulator serves every industry from one instance — end the URL with this company&apos;s industry,
-          e.g. <code>http://localhost:9000/steel</code>.
+          Enter your factory data source&apos;s connection URL.
         </p>
         <div className="flex gap-2 flex-wrap">
           <input
@@ -493,14 +470,6 @@ function PeopleTab({ projectId, people, onChanged }: { projectId: string; people
 
   return (
     <div className="space-y-5">
-      <div className="bg-[var(--surface-2)] rounded-xl p-4 flex items-center gap-3">
-        <span className="material-symbols-outlined text-[var(--accent)] text-[22px]">info</span>
-        <p className="text-xs text-[var(--text-muted)] m-0">
-          Everyone opens the <b>same</b> operational dashboard — a person&apos;s job title just describes what they act
-          on.
-        </p>
-      </div>
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <AdminStat label="People" value={String(people.length)} sub="on the team" />
         <AdminStat label="Active" value={String(activeCount)} sub="signed in this week" tone="ok" />
@@ -510,9 +479,6 @@ function PeopleTab({ projectId, people, onChanged }: { projectId: string; people
         <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
           <div>
             <h3 className="text-sm font-extrabold">Team</h3>
-            <p className="text-xs text-[var(--text-muted)] mt-0.5">
-              Assign a person&apos;s job — access to the one operational dashboard is the same for all.
-            </p>
           </div>
         </div>
 

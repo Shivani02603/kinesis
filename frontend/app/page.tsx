@@ -131,7 +131,6 @@ export default function SuperAdminHome() {
 
   return (
     <AdminShell
-      tierLabel="Tier 1 · Platform"
       scopeName="All client companies"
       nav={nav}
       userEmail={user.email}

@@ -147,14 +147,28 @@ function StatRow({ stats }: { stats: Stat[] }) {
 
 // ------------------------------------------------------------- top bar ----
 
-function TopBar({ projectName, title, attention }: { projectName: string; title: string; attention: number }) {
+function TopBar({
+  projectName, title, attention, sidebarOpen, onToggleSidebar,
+}: {
+  projectName: string; title: string; attention: number;
+  sidebarOpen: boolean; onToggleSidebar: () => void;
+}) {
   // The date is computed at render time, so it advances by itself each day
   // the dashboard is opened — no stored date anywhere.
   const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   return (
     <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
-      <div className="flex items-center gap-3">
-        <h1 className="text-xl font-bold text-[var(--text)]">{title}</h1>
+      <div className="flex items-center gap-3 min-w-0">
+        {!sidebarOpen && (
+          <button
+            onClick={onToggleSidebar}
+            className="flex-none inline-flex items-center justify-center w-9 h-9 rounded-lg border border-[var(--border)] bg-white text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+            aria-label="Open menu"
+          >
+            <span className="material-symbols-outlined text-[20px]">menu</span>
+          </button>
+        )}
+        <h1 className="text-xl font-bold text-[var(--text)] truncate">{title}</h1>
         <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] bg-white border border-[var(--border)] rounded-lg px-3 py-1.5">
           <span className="material-symbols-outlined text-[16px]">factory</span>
           {projectName}
@@ -181,24 +195,38 @@ function TopBar({ projectName, title, attention }: { projectName: string; title:
 // ------------------------------------------------------------- sidebar ----
 
 function Sidebar({
-  projectId, projectName, cards, selected, onSelect,
+  projectId, projectName, cards, selected, onSelect, open, onToggle, onNavigate,
 }: {
   projectId: string; projectName: string; cards: DashboardCard[];
   selected: string | null; onSelect: (objective: string | null) => void;
+  open: boolean; onToggle: () => void; onNavigate?: () => void;
 }) {
   const router = useRouter();
   const byObjective = new Map(cards.map((c) => [c.objective, c]));
   return (
-    <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-[var(--surface-2)] flex-col py-6 border-r border-[var(--border)] z-20">
+    <aside
+      className={`fixed left-0 top-0 h-screen w-64 bg-[var(--surface-2)] flex flex-col py-6 border-r border-[var(--border)] z-30 transition-transform duration-200 ${
+        open ? "translate-x-0" : "-translate-x-full"
+      }`}
+    >
       <div className="px-5 mb-6">
-        <div className="flex items-center gap-2 mb-1">
-          <div className="w-8 h-8 bg-[var(--accent)] rounded flex items-center justify-center">
-            <span className="material-symbols-outlined text-white text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>factory</span>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 bg-[var(--accent)] rounded flex items-center justify-center flex-none">
+              <span className="material-symbols-outlined text-white text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>factory</span>
+            </div>
+            <div className="flex flex-col leading-tight min-w-0">
+              <span className="font-bold text-[var(--accent)] text-sm">Kinesis</span>
+              <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider truncate max-w-[140px]">{projectName}</span>
+            </div>
           </div>
-          <div className="flex flex-col leading-tight">
-            <span className="font-bold text-[var(--accent)] text-sm">Kinesis</span>
-            <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider truncate max-w-[140px]">{projectName}</span>
-          </div>
+          <button
+            onClick={onToggle}
+            className="flex-none inline-flex items-center justify-center w-7 h-7 rounded-md text-[var(--text-muted)] hover:bg-white"
+            aria-label="Close menu"
+          >
+            <span className="material-symbols-outlined text-[18px]">menu_open</span>
+          </button>
         </div>
       </div>
       <nav className="flex-1 px-3 space-y-1 overflow-y-auto scrollbar-thin">
@@ -209,7 +237,10 @@ function Sidebar({
           return (
             <button
               key={n.label}
-              onClick={() => onSelect(n.objective)}
+              onClick={() => {
+                onSelect(n.objective);
+                onNavigate?.();
+              }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors text-sm font-semibold ${
                 active ? "bg-[var(--accent-soft)] text-[var(--accent-hover)]" : "text-[var(--text-muted)] hover:bg-white"
               }`}
@@ -223,14 +254,20 @@ function Sidebar({
       </nav>
       <div className="px-3 mt-auto pt-3 border-t border-[var(--border)] space-y-1">
         <button
-          onClick={() => router.push(`/projects/${projectId}`)}
+          onClick={() => {
+            router.push(`/projects/${projectId}`);
+            onNavigate?.();
+          }}
           className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[var(--text-muted)] hover:bg-white text-sm font-medium"
         >
           <span className="material-symbols-outlined text-[20px]">build</span>
           Technical workspace
         </button>
         <button
-          onClick={() => router.push("/")}
+          onClick={() => {
+            router.push("/");
+            onNavigate?.();
+          }}
           className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[var(--text-muted)] hover:bg-white text-sm font-medium"
         >
           <span className="material-symbols-outlined text-[20px]">arrow_back</span>
@@ -968,8 +1005,7 @@ function InventorySettingsForm({ material, projectId, onSaved }: { material: str
     <div className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-5">
       <h3 className="text-sm font-bold text-[var(--text)] mb-1">{materialLabel(material)}</h3>
       <p className="text-xs text-[var(--text-muted)] mb-3">
-        Usage is forecast from your data, but current stock and supplier lead time are real facts only you
-        know — entered once and remembered.
+        Current stock and supplier lead time — entered once and remembered.
       </p>
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
@@ -1742,7 +1778,6 @@ function Overview({ cards, onOpen }: { cards: DashboardCard[]; onOpen: (objectiv
             "Everything is running normally"
           )}
         </h2>
-        <p className="text-[var(--text-muted)] text-sm mt-1">Every number below is computed from your own uploaded data — nothing is estimated by hand.</p>
       </header>
       <StatRow stats={overviewStats(cards)} />
       <InsightStrip cards={cards} />
@@ -1818,6 +1853,13 @@ export function DecisionDashboard({ projectId, projectName }: { projectId: strin
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    // One-time environment check, not a value React itself owns.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (window.matchMedia("(max-width: 767px)").matches) setSidebarOpen(false);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -1855,10 +1897,28 @@ export function DecisionDashboard({ projectId, projectName }: { projectId: strin
   const title = selected ? NAV_LABEL[selected] ?? "Overview" : "Overview";
 
   return (
-    <div className="h-screen overflow-y-auto bg-[var(--bg)]">
-      <Sidebar projectId={projectId} projectName={projectName} cards={cards} selected={selected} onSelect={setSelected} />
-      <main className="md:ml-64 px-6 md:px-10 py-6 max-w-[1600px]">
-        <TopBar projectName={projectName} title={title} attention={attention} />
+    <div className="h-screen bg-[var(--bg)] overflow-hidden">
+      {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-20 md:hidden" onClick={() => setSidebarOpen(false)} />}
+      <Sidebar
+        projectId={projectId}
+        projectName={projectName}
+        cards={cards}
+        selected={selected}
+        onSelect={setSelected}
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen((o) => !o)}
+        onNavigate={() => {
+          if (window.matchMedia("(max-width: 767px)").matches) setSidebarOpen(false);
+        }}
+      />
+      <main className={`h-screen overflow-y-auto scrollbar-thin px-4 md:px-10 py-6 transition-[margin] duration-200 ${sidebarOpen ? "md:ml-64" : "md:ml-0"}`}>
+        <TopBar
+          projectName={projectName}
+          title={title}
+          attention={attention}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen((o) => !o)}
+        />
         {selectedCard ? (
           <ObjectiveDetail card={selectedCard} projectId={projectId} onSettingsSaved={refresh} graph={graph} />
         ) : (
