@@ -255,7 +255,7 @@ export default function ProjectPage() {
             </aside>
           ))}
 
-          <main className="flex-1 min-w-0 flex flex-col">
+          <main className="flex-1 min-w-0 min-h-0 flex flex-col">
             <div className="flex items-center gap-1 border-b border-[var(--border)] px-4 pt-2 shrink-0">
               {(["graph", "computation"] as const).map((tab) => (
                 <button
