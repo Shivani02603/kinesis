@@ -366,7 +366,7 @@ function ConnectionsTab({ projectId }: { projectId: string }) {
         <div className="flex gap-2 flex-wrap">
           <input
             className="flex-1 min-w-[240px] border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-[var(--bg)]"
-            placeholder="http://localhost:9000/steel"
+            placeholder="https://kinesisai.me/simulator/<industry>"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />
