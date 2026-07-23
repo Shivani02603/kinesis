@@ -92,7 +92,10 @@ def status(industry: str):
 @app.get("/", response_class=HTMLResponse)
 def home():
     inds = simulator.list_industries()
-    links = "".join(f'<li><a href="/{i}">{i}</a></li>' for i in inds)
+    # Relative (not "/{i}") so this works whether the simulator is reached at
+    # its own root (:9000/) or behind a reverse-proxy sub-path (/simulator/) —
+    # an absolute link would resolve from the domain root and drop the prefix.
+    links = "".join(f'<li><a href="{i}">{i}</a></li>' for i in inds)
     return f"""
     <html><head><title>Factory Data Simulator</title>
     <style>
@@ -134,7 +137,7 @@ def control_panel(industry: str):
       a.back {{ color:#0f52ba; font-size:.85rem; }}
     </style></head>
     <body>
-      <a class="back" href="/">&larr; all industries</a>
+      <a class="back" href=".">&larr; all industries</a>
       <h1>🏭 Factory Data Simulator — {industry}</h1>
       <p>This stands in for {industry}'s real sensor database. Kinesis connects to
       <code>/{industry}/...</code> and pulls new readings.</p>
@@ -148,19 +151,22 @@ def control_panel(industry: str):
       <h3>Signals — flip one to "degrade" then generate, to show a machine drifting out of normal</h3>
       <table><tr><th>Signal</th><th>Table</th><th>Degrade</th></tr>{signal_rows}</table>
       <script>
+        // Relative fetch paths (not "/${industry}/...") for the same reason
+        // the nav link above is relative — must still resolve correctly
+        // behind a reverse-proxy sub-path like /simulator/.
         const industry = {industry!r};
         async function advance() {{
           const hours = Number(document.getElementById('hrs').value) || 24;
-          await fetch(`/${{industry}}/advance`, {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{hours}})}});
+          await fetch(`${{industry}}/advance`, {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{hours}})}});
           location.reload();
         }}
         async function degrade(signal, on) {{
-          await fetch(`/${{industry}}/degrade`, {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{signal, on}})}});
+          await fetch(`${{industry}}/degrade`, {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{signal, on}})}});
           location.reload();
         }}
         async function reseed() {{
           if (!confirm('Reset this industry back to the original fixtures?')) return;
-          await fetch(`/${{industry}}/reseed`, {{method:'POST'}}); location.reload();
+          await fetch(`${{industry}}/reseed`, {{method:'POST'}}); location.reload();
         }}
       </script>
     </body></html>
