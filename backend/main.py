@@ -273,6 +273,13 @@ def resolve_structure_request_endpoint(
     return db.get_structure_request(request_id)
 
 
+# Streamed to disk in bounded chunks below rather than read into memory in one
+# shot — a multi-gigabyte source file must not require a multi-gigabyte spike
+# in server RAM just to save it. 1 MiB keeps memory flat regardless of how
+# large the uploaded file actually is.
+_UPLOAD_CHUNK_SIZE = 1024 * 1024
+
+
 @app.post("/api/projects/{project_id}/upload")
 async def upload_files(project_id: str, files: list[UploadFile]):
     _project_or_404(project_id)
@@ -281,7 +288,9 @@ async def upload_files(project_id: str, files: list[UploadFile]):
     saved = []
     for f in files:
         dest = project_dir / f.filename
-        dest.write_bytes(await f.read())
+        with open(dest, "wb") as out:
+            while chunk := await f.read(_UPLOAD_CHUNK_SIZE):
+                out.write(chunk)
         saved.append(f.filename)
     return {"saved": saved}
 
