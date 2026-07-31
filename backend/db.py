@@ -104,21 +104,90 @@ def init_db() -> None:
                 expires_at TEXT NOT NULL
             );
 
-            -- One row per structure-change request a Company Admin raises; a Super
-            -- Admin resolves it (approved requests are actioned manually by re-running
-            -- the discovery pipeline — this table is the request/audit trail, not an
-            -- automated trigger).
-            CREATE TABLE IF NOT EXISTS structure_requests (
+            -- One row per notable thing that happened in a company's project —
+            -- new data processed, a version confirmed, a live-sync pull. This is
+            -- the Super Admin's read-only visibility into work a Company Admin
+            -- now does entirely on their own; nothing here is ever approved or
+            -- actioned, only recorded.
+            CREATE TABLE IF NOT EXISTS activity_log (
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
-                requested_by TEXT NOT NULL,
-                description TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending',
+                kind TEXT NOT NULL,
+                message TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            -- Production-mix planning: real, human-entered facts about what a company
+            -- can produce and sell. Unlike scheduling's identify_inputs, nothing here
+            -- is ever extracted from an upload — a Company Admin enters and edits these
+            -- directly, and they persist across "generate plan" runs.
+            CREATE TABLE IF NOT EXISTS plan_products (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                profit_per_unit REAL NOT NULL,
+                demand_min REAL,
+                demand_max REAL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS plan_resources (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                unit TEXT NOT NULL,
+                available_capacity REAL NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            -- Sparse: a missing (product_id, resource_id) row means that product uses
+            -- none of that resource.
+            CREATE TABLE IF NOT EXISTS plan_consumption (
+                project_id TEXT NOT NULL,
+                product_id TEXT NOT NULL,
+                resource_id TEXT NOT NULL,
+                per_unit REAL NOT NULL,
+                PRIMARY KEY (project_id, product_id, resource_id)
+            );
+
+            -- One row per "Generate plan" click. result is a fully self-contained
+            -- snapshot of both the inputs used and the solved (or honestly-failed)
+            -- outcome at that moment — never just ids referencing the live products/
+            -- resources rows, since those are edited and deleted over time and would
+            -- make old history unintelligible otherwise (same reasoning as
+            -- graph_versions.snapshot storing a full copy rather than a reference).
+            CREATE TABLE IF NOT EXISTS plan_runs (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                result TEXT,
+                error TEXT,
                 created_at TEXT NOT NULL,
-                resolved_at TEXT,
-                resolution_note TEXT,
-                attached_files TEXT,
-                pipeline_stage TEXT
+                total_profit REAL
+            );
+
+            -- Machines are distinct from plan_resources: a machine has downtime
+            -- (from the maintenance objective) and product-compatibility, neither
+            -- of which mean anything for a pooled resource like material or budget.
+            CREATE TABLE IF NOT EXISTS plan_machines (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                available_hours REAL NOT NULL,
+                utilization_floor REAL,
+                asset_name TEXT,
+                created_at TEXT NOT NULL
+            );
+
+            -- Sparse: a missing (product_id, machine_id) row means that product
+            -- cannot run on that machine at all. Doubles as the compatibility flag
+            -- AND the processing rate — no separate boolean table needed.
+            CREATE TABLE IF NOT EXISTS plan_machine_compatibility (
+                project_id TEXT NOT NULL,
+                product_id TEXT NOT NULL,
+                machine_id TEXT NOT NULL,
+                hours_per_unit REAL NOT NULL,
+                PRIMARY KEY (project_id, product_id, machine_id)
             );
             """
         )
@@ -133,11 +202,58 @@ def init_db() -> None:
         existing_user_cols = {r["name"] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
         if "job_title" not in existing_user_cols:
             conn.execute("ALTER TABLE users ADD COLUMN job_title TEXT")
-        existing_req_cols = {r["name"] for r in conn.execute("PRAGMA table_info(structure_requests)").fetchall()}
-        if "attached_files" not in existing_req_cols:
-            conn.execute("ALTER TABLE structure_requests ADD COLUMN attached_files TEXT")
-        if "pipeline_stage" not in existing_req_cols:
-            conn.execute("ALTER TABLE structure_requests ADD COLUMN pipeline_stage TEXT")
+
+        # price_per_unit/cost_per_unit replace profit_per_unit as the real inputs
+        # (profit = price - cost, computed — never two numbers that could disagree).
+        # profit_per_unit itself stays as a computed cache, never dropped, so rows
+        # created before this migration keep working under the default objective.
+        existing_product_cols = {r["name"] for r in conn.execute("PRAGMA table_info(plan_products)").fetchall()}
+        for col, decl in (
+            ("price_per_unit", "REAL"), ("cost_per_unit", "REAL"),
+            ("batch_min", "REAL"), ("batch_max", "REAL"),
+        ):
+            if col not in existing_product_cols:
+                conn.execute(f"ALTER TABLE plan_products ADD COLUMN {col} {decl}")
+
+        existing_resource_cols = {r["name"] for r in conn.execute("PRAGMA table_info(plan_resources)").fetchall()}
+        if "kind" not in existing_resource_cols:
+            conn.execute("ALTER TABLE plan_resources ADD COLUMN kind TEXT")
+
+        existing_run_cols = {r["name"] for r in conn.execute("PRAGMA table_info(plan_runs)").fetchall()}
+        if "total_profit" not in existing_run_cols:
+            conn.execute("ALTER TABLE plan_runs ADD COLUMN total_profit REAL")
+        if "objective" not in existing_run_cols:
+            conn.execute("ALTER TABLE plan_runs ADD COLUMN objective TEXT")
+        if "objective_value" not in existing_run_cols:
+            conn.execute("ALTER TABLE plan_runs ADD COLUMN objective_value REAL")
+
+        # Constraints used to be permanently on (the old solver always enforced
+        # demand/resources). Projects that already have products/resources today
+        # must keep behaving that way after this migration — seed their toggles to
+        # "on" once, idempotently. A brand-new project created after this ships
+        # gets no seeded rows and sees the real default (off, user opts in).
+        existing_plan_projects = {
+            r["project_id"] for r in conn.execute("SELECT DISTINCT project_id FROM plan_products").fetchall()
+        } | {
+            r["project_id"] for r in conn.execute("SELECT DISTINCT project_id FROM plan_resources").fetchall()
+        }
+        for pid in existing_plan_projects:
+            existing_keys = {
+                r["key"] for r in conn.execute(
+                    "SELECT key FROM project_settings WHERE project_id = ? AND key LIKE 'planning.constraint.%'",
+                    (pid,),
+                ).fetchall()
+            }
+            for key in (
+                "planning.constraint.demand_ceiling", "planning.constraint.min_committed_order",
+                "planning.constraint.pooled_resources", "planning.constraint.batch_size",
+                "planning.constraint.utilization_floor",
+            ):
+                if key not in existing_keys:
+                    conn.execute(
+                        "INSERT INTO project_settings (project_id, key, value, updated_at) VALUES (?, ?, 'true', ?)",
+                        (pid, key, _now()),
+                    )
 
 
 @contextmanager
@@ -539,70 +655,22 @@ def list_training_runs(project_id: str, objective: str | None = None) -> list[di
     return [_training_run_row_to_dict(r, include_result=False) for r in rows]
 
 
-# ---- structure-change requests ---------------------------------------------
+# ---- activity log (Super Admin's read-only visibility) ---------------------
 
-def _structure_request_row_to_dict(row) -> dict:
-    d = dict(row)
-    d["attached_files"] = json.loads(d["attached_files"]) if d.get("attached_files") else []
-    return d
-
-
-def create_structure_request(
-    project_id: str, requested_by: str, description: str, attached_files: list[str] | None = None
-) -> dict:
-    req_id = str(uuid.uuid4())
+def log_activity(project_id: str, kind: str, message: str) -> None:
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO structure_requests (id, project_id, requested_by, description, status, created_at, attached_files) "
-            "VALUES (?, ?, ?, ?, 'pending', ?, ?)",
-            (req_id, project_id, requested_by, description, _now(), json.dumps(attached_files or [])),
+            "INSERT INTO activity_log (id, project_id, kind, message, created_at) VALUES (?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), project_id, kind, message, _now()),
         )
-        row = conn.execute("SELECT * FROM structure_requests WHERE id = ?", (req_id,)).fetchone()
-    return _structure_request_row_to_dict(row)
 
 
-def get_structure_request(request_id: str) -> dict | None:
+def list_activity(project_id: str) -> list[dict]:
     with _connect() as conn:
-        row = conn.execute("SELECT * FROM structure_requests WHERE id = ?", (request_id,)).fetchone()
-    return _structure_request_row_to_dict(row) if row else None
-
-
-def list_structure_requests(project_id: str | None = None) -> list[dict]:
-    with _connect() as conn:
-        if project_id is not None:
-            rows = conn.execute(
-                "SELECT * FROM structure_requests WHERE project_id = ? ORDER BY created_at DESC", (project_id,)
-            ).fetchall()
-        else:
-            rows = conn.execute("SELECT * FROM structure_requests ORDER BY created_at DESC").fetchall()
-    return [_structure_request_row_to_dict(r) for r in rows]
-
-
-def resolve_structure_request(request_id: str, status: str, resolution_note: str | None = None) -> dict | None:
-    with _connect() as conn:
-        conn.execute(
-            "UPDATE structure_requests SET status = ?, resolved_at = ?, resolution_note = ? WHERE id = ?",
-            (status, _now(), resolution_note, request_id),
-        )
-        row = conn.execute("SELECT * FROM structure_requests WHERE id = ?", (request_id,)).fetchone()
-    return _structure_request_row_to_dict(row) if row else None
-
-
-def set_structure_request_stage(request_id: str, pipeline_stage: str, resolution_note: str | None = None) -> None:
-    """Progress marker for the approve → auto-pipeline flow: 'running' | 'needs_review'
-    | 'trained' | 'failed'. Separate from status (pending/approved/rejected) so the
-    approval decision and what the pipeline then did are each recorded honestly."""
-    with _connect() as conn:
-        if resolution_note is not None:
-            conn.execute(
-                "UPDATE structure_requests SET pipeline_stage = ?, resolution_note = ? WHERE id = ?",
-                (pipeline_stage, resolution_note, request_id),
-            )
-        else:
-            conn.execute(
-                "UPDATE structure_requests SET pipeline_stage = ? WHERE id = ?",
-                (pipeline_stage, request_id),
-            )
+        rows = conn.execute(
+            "SELECT * FROM activity_log WHERE project_id = ? ORDER BY created_at DESC", (project_id,)
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def get_training_run(run_id: str) -> dict | None:
@@ -633,3 +701,242 @@ def get_version(version_id: str) -> dict | None:
     d = dict(row)
     d["snapshot"] = json.loads(d["snapshot"])
     return d
+
+
+# ---- production-mix planning (real, human-entered facts) -------------------
+
+def create_plan_product(
+    project_id: str, name: str, price_per_unit: float, cost_per_unit: float,
+    demand_min: float | None = None, demand_max: float | None = None,
+    batch_min: float | None = None, batch_max: float | None = None,
+) -> dict:
+    product_id = str(uuid.uuid4())
+    profit_per_unit = price_per_unit - cost_per_unit
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO plan_products (id, project_id, name, profit_per_unit, price_per_unit, cost_per_unit, "
+            "demand_min, demand_max, batch_min, batch_max, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (product_id, project_id, name, profit_per_unit, price_per_unit, cost_per_unit,
+             demand_min, demand_max, batch_min, batch_max, _now()),
+        )
+        row = conn.execute("SELECT * FROM plan_products WHERE id = ?", (product_id,)).fetchone()
+    return dict(row)
+
+
+def get_plan_product(product_id: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM plan_products WHERE id = ?", (product_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_plan_products(project_id: str) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM plan_products WHERE project_id = ? ORDER BY created_at", (project_id,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_plan_product(
+    product_id: str, name: str, price_per_unit: float, cost_per_unit: float,
+    demand_min: float | None, demand_max: float | None,
+    batch_min: float | None = None, batch_max: float | None = None,
+) -> dict | None:
+    profit_per_unit = price_per_unit - cost_per_unit
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE plan_products SET name = ?, profit_per_unit = ?, price_per_unit = ?, cost_per_unit = ?, "
+            "demand_min = ?, demand_max = ?, batch_min = ?, batch_max = ? WHERE id = ?",
+            (name, profit_per_unit, price_per_unit, cost_per_unit, demand_min, demand_max,
+             batch_min, batch_max, product_id),
+        )
+        row = conn.execute("SELECT * FROM plan_products WHERE id = ?", (product_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def delete_plan_product(product_id: str) -> None:
+    # No FK enforcement in this sqlite schema — the consumption matrix's and
+    # the machine-compatibility matrix's references to this product must be
+    # cleaned up explicitly here.
+    with _connect() as conn:
+        conn.execute("DELETE FROM plan_consumption WHERE product_id = ?", (product_id,))
+        conn.execute("DELETE FROM plan_machine_compatibility WHERE product_id = ?", (product_id,))
+        conn.execute("DELETE FROM plan_products WHERE id = ?", (product_id,))
+
+
+def create_plan_resource(
+    project_id: str, name: str, unit: str, available_capacity: float, kind: str | None = None,
+) -> dict:
+    resource_id = str(uuid.uuid4())
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO plan_resources (id, project_id, name, unit, available_capacity, kind, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (resource_id, project_id, name, unit, available_capacity, kind, _now()),
+        )
+        row = conn.execute("SELECT * FROM plan_resources WHERE id = ?", (resource_id,)).fetchone()
+    return dict(row)
+
+
+def get_plan_resource(resource_id: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM plan_resources WHERE id = ?", (resource_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_plan_resources(project_id: str) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM plan_resources WHERE project_id = ? ORDER BY created_at", (project_id,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_plan_resource(
+    resource_id: str, name: str, unit: str, available_capacity: float, kind: str | None = None,
+) -> dict | None:
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE plan_resources SET name = ?, unit = ?, available_capacity = ?, kind = ? WHERE id = ?",
+            (name, unit, available_capacity, kind, resource_id),
+        )
+        row = conn.execute("SELECT * FROM plan_resources WHERE id = ?", (resource_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def delete_plan_resource(resource_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM plan_consumption WHERE resource_id = ?", (resource_id,))
+        conn.execute("DELETE FROM plan_resources WHERE id = ?", (resource_id,))
+
+
+def create_plan_machine(
+    project_id: str, name: str, available_hours: float,
+    utilization_floor: float | None = None, asset_name: str | None = None,
+) -> dict:
+    machine_id = str(uuid.uuid4())
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO plan_machines (id, project_id, name, available_hours, utilization_floor, "
+            "asset_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (machine_id, project_id, name, available_hours, utilization_floor, asset_name, _now()),
+        )
+        row = conn.execute("SELECT * FROM plan_machines WHERE id = ?", (machine_id,)).fetchone()
+    return dict(row)
+
+
+def get_plan_machine(machine_id: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM plan_machines WHERE id = ?", (machine_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_plan_machines(project_id: str) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM plan_machines WHERE project_id = ? ORDER BY created_at", (project_id,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_plan_machine(
+    machine_id: str, name: str, available_hours: float,
+    utilization_floor: float | None, asset_name: str | None,
+) -> dict | None:
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE plan_machines SET name = ?, available_hours = ?, utilization_floor = ?, asset_name = ? "
+            "WHERE id = ?",
+            (name, available_hours, utilization_floor, asset_name, machine_id),
+        )
+        row = conn.execute("SELECT * FROM plan_machines WHERE id = ?", (machine_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def delete_plan_machine(machine_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM plan_machine_compatibility WHERE machine_id = ?", (machine_id,))
+        conn.execute("DELETE FROM plan_machines WHERE id = ?", (machine_id,))
+
+
+def list_plan_machine_compatibility(project_id: str) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT product_id, machine_id, hours_per_unit FROM plan_machine_compatibility WHERE project_id = ?",
+            (project_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def set_plan_machine_compatibility(project_id: str, cells: list[dict]) -> None:
+    """Atomic full replace — same delete-then-insert shape as set_plan_consumption."""
+    with _connect() as conn:
+        conn.execute("DELETE FROM plan_machine_compatibility WHERE project_id = ?", (project_id,))
+        for cell in cells:
+            conn.execute(
+                "INSERT INTO plan_machine_compatibility (project_id, product_id, machine_id, hours_per_unit) "
+                "VALUES (?, ?, ?, ?)",
+                (project_id, cell["product_id"], cell["machine_id"], cell["hours_per_unit"]),
+            )
+
+
+def list_plan_consumption(project_id: str) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT product_id, resource_id, per_unit FROM plan_consumption WHERE project_id = ?",
+            (project_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def set_plan_consumption(project_id: str, cells: list[dict]) -> None:
+    """Atomic full replace — one commit, same delete-then-insert shape as
+    sync_review_items, so a partial write can never leave a stale mix of old
+    and new cells."""
+    with _connect() as conn:
+        conn.execute("DELETE FROM plan_consumption WHERE project_id = ?", (project_id,))
+        for cell in cells:
+            conn.execute(
+                "INSERT INTO plan_consumption (project_id, product_id, resource_id, per_unit) VALUES (?, ?, ?, ?)",
+                (project_id, cell["product_id"], cell["resource_id"], cell["per_unit"]),
+            )
+
+
+def create_plan_run(
+    project_id: str, status: str, result: dict | None = None, error: str | None = None,
+    total_profit: float | None = None, objective: str | None = None, objective_value: float | None = None,
+) -> dict:
+    run_id = str(uuid.uuid4())
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO plan_runs (id, project_id, status, result, error, created_at, total_profit, "
+            "objective, objective_value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (run_id, project_id, status, json.dumps(result) if result is not None else None, error, _now(),
+             total_profit, objective, objective_value),
+        )
+        row = conn.execute("SELECT * FROM plan_runs WHERE id = ?", (run_id,)).fetchone()
+    d = dict(row)
+    d["result"] = json.loads(d["result"]) if d["result"] else None
+    return d
+
+
+def get_plan_run(run_id: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM plan_runs WHERE id = ?", (run_id,)).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    d["result"] = json.loads(d["result"]) if d["result"] else None
+    return d
+
+
+def list_plan_runs(project_id: str) -> list[dict]:
+    """Excludes the (potentially large) result payload, mirroring list_training_runs —
+    the history list only needs status/timestamp; get_plan_run fetches one run in full."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, project_id, status, error, created_at, total_profit, objective, objective_value "
+            "FROM plan_runs WHERE project_id = ? ORDER BY created_at DESC",
+            (project_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]

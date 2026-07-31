@@ -24,7 +24,7 @@ export default function ProjectPage() {
   const params = useParams<{ id: string }>();
   const projectId = params.id;
   const router = useRouter();
-  const { user, loading: authLoading } = useAuthGuard({ requiredRole: "super_admin" });
+  const { user, loading: authLoading } = useAuthGuard({ requiredRole: "company_admin", projectId });
 
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -113,8 +113,7 @@ export default function ProjectPage() {
   }
 
   const nav: ShellNavItem[] = [
-    { label: "Client companies", icon: "apartment", onClick: () => router.push("/") },
-    { label: "Structure requests", icon: "inbox", onClick: () => router.push("/") },
+    { label: "Company console", icon: "space_dashboard", onClick: () => router.push(`/company/${projectId}`) },
   ];
 
   return (

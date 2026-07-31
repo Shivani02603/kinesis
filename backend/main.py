@@ -27,7 +27,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from understanding_engine.feasibility import check_feasibility  # noqa: E402
 from understanding_engine.graph_store import GraphStore  # noqa: E402
 from understanding_engine.pipeline import run_pipeline  # noqa: E402
-from decision_layer.narration import SUMMARIZERS, Card  # noqa: E402
+from decision_layer.narration import SUMMARIZERS, Card, summarize_deviation, summarize_maintenance  # noqa: E402
+from planning_engine.solver import solve_production_mix  # noqa: E402
 
 from . import auth, data_connector, db  # noqa: E402
 
@@ -207,72 +208,6 @@ def create_project_user(project_id: str, body: CreateUserRequest):
     return _user_public(user)
 
 
-# ---- structure-change requests (Tier 2 requests, Tier 1 resolves) ----------
-
-class CreateStructureRequestBody(BaseModel):
-    description: str
-    # Filenames the Company Admin already uploaded (via the normal upload endpoint)
-    # to carry the new machine's data — the request can't add a machine without it.
-    attached_files: list[str] = []
-
-
-class ResolveStructureRequestBody(BaseModel):
-    status: str  # "approved" | "rejected"
-    resolution_note: str | None = None
-
-
-@app.post("/api/projects/{project_id}/structure-requests")
-def create_structure_request(project_id: str, body: CreateStructureRequestBody, current: dict = Depends(auth.current_user)):
-    _project_or_404(project_id)
-    return db.create_structure_request(project_id, current["email"], body.description, body.attached_files)
-
-
-@app.get("/api/projects/{project_id}/structure-requests")
-def list_project_structure_requests(project_id: str):
-    _project_or_404(project_id)
-    return db.list_structure_requests(project_id)
-
-
-@app.get("/api/structure-requests")
-def list_all_structure_requests(current: dict = Depends(auth.require_super_admin)):
-    return db.list_structure_requests()
-
-
-@app.post("/api/structure-requests/{request_id}/resolve")
-def resolve_structure_request_endpoint(
-    request_id: str,
-    body: ResolveStructureRequestBody,
-    background_tasks: BackgroundTasks,
-    current: dict = Depends(auth.require_super_admin),
-):
-    request = db.get_structure_request(request_id)
-    if not request:
-        raise HTTPException(status_code=404, detail="request not found")
-    updated = db.resolve_structure_request(request_id, body.status, body.resolution_note)
-
-    # Approving is the trigger: run discovery on the files the request brought, then
-    # (Option A) auto-confirm + retrain if clean, or hand off to review if there are
-    # questions. Rejecting stays a pure status change.
-    if body.status == "approved":
-        files = request.get("attached_files") or []
-        if not files:
-            db.set_structure_request_stage(
-                request_id, "failed",
-                "No data was attached to this request, so there's nothing to add — ask the Company Admin to "
-                "attach the new machine's file(s) and raise it again.",
-            )
-        elif _discovery_progress.get(request["project_id"], {}).get("status") == "running":
-            db.set_structure_request_stage(
-                request_id, "failed",
-                "A discovery run is already in progress for this company — try again once it finishes.",
-            )
-        else:
-            background_tasks.add_task(
-                _execute_structure_request_approval, request_id, request["project_id"], files
-            )
-    return db.get_structure_request(request_id)
-
-
 # Streamed to disk in bounded chunks below rather than read into memory in one
 # shot — a multi-gigabyte source file must not require a multi-gigabyte spike
 # in server RAM just to save it. 1 MiB keeps memory flat regardless of how
@@ -327,14 +262,11 @@ def _fresh_progress() -> dict:
     }
 
 
-def _execute_discovery_run(project_id: str, new_filenames: list[str], on_complete=None):
+def _execute_discovery_run(project_id: str, new_filenames: list[str]):
     # Runs in Starlette's background threadpool after the response is sent, same
     # pattern as _execute_training_run. Every log line pushed into
     # _discovery_progress is a real message run_pipeline emitted about this
     # specific run's own data — never a scripted placeholder.
-    # on_complete(pending_count) runs only after a SUCCESSFUL discovery — the
-    # structure-request approval flow uses it to auto-confirm+train when there are
-    # no questions, or hand off to review when there are.
     project_dir = UPLOAD_ROOT / project_id
     progress = _discovery_progress[project_id]
 
@@ -391,14 +323,16 @@ def _execute_discovery_run(project_id: str, new_filenames: list[str], on_complet
                     f"{progress['gaps']} questions",
                 }
             )
-        if on_complete is not None:
-            on_complete(db.pending_count(project_id))
+        db.log_activity(
+            project_id, "data_processed",
+            f"New data processed from {len(new_filenames)} file(s) — {progress['entities']} entities, "
+            f"{progress['merges']} auto-merged"
+            + (f", {progress['gaps']} question(s) need review." if progress["gaps"] else ", no open questions."),
+        )
     except Exception as exc:  # noqa: BLE001 — the progress record is the error channel
         with _DISCOVERY_LOCK:
             progress["status"] = "failed"
             progress["error"] = str(exc)
-        if on_complete is not None:
-            on_complete(None)  # None signals discovery itself failed
 
 
 @app.post("/api/projects/{project_id}/run")
@@ -470,13 +404,25 @@ def confirm_version(project_id: str):
             detail=f"{pending} review item(s) still pending — resolve them before confirming a version",
         )
     snapshot = store.fetch_graph(project_id)
-    return db.confirm_version(project_id, snapshot)
+    version = db.confirm_version(project_id, snapshot)
+    db.log_activity(project_id, "version_confirmed", f"Version {version['version_number']} confirmed.")
+    return version
 
 
 @app.get("/api/projects/{project_id}/versions")
 def list_versions(project_id: str):
     _project_or_404(project_id)
     return db.list_versions(project_id)
+
+
+@app.get("/api/projects/{project_id}/activity")
+def get_activity(project_id: str):
+    """Read-only feed for the Super Admin: what a Company Admin has done on their
+    own — new data processed, versions confirmed, live-sync pulls. Nothing here is
+    ever approved or actioned, only recorded, per the platform's tier model where
+    Company Admin owns their own project end-to-end."""
+    _project_or_404(project_id)
+    return db.list_activity(project_id)
 
 
 # ---- project settings (real human-entered facts, e.g. supplier lead time) --
@@ -543,6 +489,11 @@ def refresh_data_source(project_id: str, background_tasks: BackgroundTasks):
     if summary["total_rows_added"] > 0:
         background_tasks.add_task(_train_all_objectives, project_id)
         summary["retraining"] = True
+        synced_files = ", ".join(f["file"] for f in summary["files"] if f["rows_added"] > 0)
+        db.log_activity(
+            project_id, "live_sync",
+            f"Pulled {summary['total_rows_added']} new reading(s) via live sync ({synced_files}); retraining.",
+        )
     else:
         summary["retraining"] = False
     return summary
@@ -562,6 +513,420 @@ def get_feasibility(project_id: str, objective: str = "maintenance"):
     project_dir = UPLOAD_ROOT / project_id
     verdict = check_feasibility(objective, store, project_id, project_dir)
     return asdict(verdict)
+
+
+# ---- Production-mix planning — real, human-entered facts, independent of ---
+# the confirmed process graph (no graph-version gate, unlike /train and
+# /feasibility above: a Company Admin can plan production mix before, during,
+# or entirely without ever building a structure graph).
+
+_PLANNING_OBJECTIVES = (
+    "maximize_profit", "maximize_revenue", "minimize_cost",
+    "maximize_utilization", "maximize_throughput", "minimize_makespan",
+)
+
+
+class PlanProductBody(BaseModel):
+    name: str
+    price_per_unit: float
+    cost_per_unit: float
+    demand_min: float | None = None
+    demand_max: float | None = None
+    batch_min: float | None = None
+    batch_max: float | None = None
+
+
+class PlanResourceBody(BaseModel):
+    name: str
+    unit: str
+    available_capacity: float
+    kind: str | None = None
+
+
+class PlanMachineBody(BaseModel):
+    name: str
+    available_hours: float
+    utilization_floor: float | None = None
+    asset_name: str | None = None
+
+
+class ConsumptionCellBody(BaseModel):
+    product_id: str
+    resource_id: str
+    per_unit: float
+
+
+class SetConsumptionBody(BaseModel):
+    cells: list[ConsumptionCellBody]
+
+
+class CompatibilityCellBody(BaseModel):
+    product_id: str
+    machine_id: str
+    hours_per_unit: float
+
+
+class SetCompatibilityBody(BaseModel):
+    cells: list[CompatibilityCellBody]
+
+
+class PlanningSettingsBody(BaseModel):
+    objective: str = "maximize_profit"
+    demand_ceiling: bool = False
+    min_committed_order: bool = False
+    pooled_resources: bool = False
+    batch_size: bool = False
+    utilization_floor: bool = False
+
+
+def _validate_plan_numbers(
+    *, demand_min=None, demand_max=None, available_capacity=None, per_unit=None,
+    price_per_unit=None, cost_per_unit=None, batch_min=None, batch_max=None,
+    available_hours=None, utilization_floor=None, hours_per_unit=None,
+):
+    for label, value in (
+        ("demand_min", demand_min), ("demand_max", demand_max),
+        ("available_capacity", available_capacity), ("per_unit", per_unit),
+        ("price_per_unit", price_per_unit), ("cost_per_unit", cost_per_unit),
+        ("batch_min", batch_min), ("batch_max", batch_max),
+        ("available_hours", available_hours), ("hours_per_unit", hours_per_unit),
+    ):
+        if value is not None and value < 0:
+            raise HTTPException(status_code=400, detail=f"{label} cannot be negative")
+    if demand_min is not None and demand_max is not None and demand_min > demand_max:
+        raise HTTPException(status_code=400, detail="demand_min cannot exceed demand_max")
+    if batch_min is not None and batch_max is not None and batch_min > batch_max:
+        raise HTTPException(status_code=400, detail="batch_min cannot exceed batch_max")
+    if utilization_floor is not None and not (0 <= utilization_floor <= 1):
+        raise HTTPException(status_code=400, detail="utilization_floor must be between 0 and 1")
+
+
+@app.get("/api/projects/{project_id}/planning/products")
+def list_plan_products(project_id: str):
+    _project_or_404(project_id)
+    return db.list_plan_products(project_id)
+
+
+@app.post("/api/projects/{project_id}/planning/products")
+def create_plan_product(project_id: str, body: PlanProductBody):
+    _project_or_404(project_id)
+    _validate_plan_numbers(
+        demand_min=body.demand_min, demand_max=body.demand_max,
+        price_per_unit=body.price_per_unit, cost_per_unit=body.cost_per_unit,
+        batch_min=body.batch_min, batch_max=body.batch_max,
+    )
+    return db.create_plan_product(
+        project_id, body.name, body.price_per_unit, body.cost_per_unit,
+        body.demand_min, body.demand_max, body.batch_min, body.batch_max,
+    )
+
+
+@app.put("/api/projects/{project_id}/planning/products/{product_id}")
+def update_plan_product(project_id: str, product_id: str, body: PlanProductBody):
+    _project_or_404(project_id)
+    _validate_plan_numbers(
+        demand_min=body.demand_min, demand_max=body.demand_max,
+        price_per_unit=body.price_per_unit, cost_per_unit=body.cost_per_unit,
+        batch_min=body.batch_min, batch_max=body.batch_max,
+    )
+    product = db.get_plan_product(product_id)
+    if not product or product["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="product not found")
+    return db.update_plan_product(
+        product_id, body.name, body.price_per_unit, body.cost_per_unit,
+        body.demand_min, body.demand_max, body.batch_min, body.batch_max,
+    )
+
+
+@app.delete("/api/projects/{project_id}/planning/products/{product_id}")
+def delete_plan_product(project_id: str, product_id: str):
+    _project_or_404(project_id)
+    product = db.get_plan_product(product_id)
+    if not product or product["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="product not found")
+    db.delete_plan_product(product_id)
+    return {"deleted": True}
+
+
+@app.get("/api/projects/{project_id}/planning/resources")
+def list_plan_resources(project_id: str):
+    _project_or_404(project_id)
+    return db.list_plan_resources(project_id)
+
+
+@app.post("/api/projects/{project_id}/planning/resources")
+def create_plan_resource(project_id: str, body: PlanResourceBody):
+    _project_or_404(project_id)
+    _validate_plan_numbers(available_capacity=body.available_capacity)
+    return db.create_plan_resource(project_id, body.name, body.unit, body.available_capacity, body.kind)
+
+
+@app.put("/api/projects/{project_id}/planning/resources/{resource_id}")
+def update_plan_resource(project_id: str, resource_id: str, body: PlanResourceBody):
+    _project_or_404(project_id)
+    _validate_plan_numbers(available_capacity=body.available_capacity)
+    resource = db.get_plan_resource(resource_id)
+    if not resource or resource["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="resource not found")
+    return db.update_plan_resource(resource_id, body.name, body.unit, body.available_capacity, body.kind)
+
+
+@app.delete("/api/projects/{project_id}/planning/resources/{resource_id}")
+def delete_plan_resource(project_id: str, resource_id: str):
+    _project_or_404(project_id)
+    resource = db.get_plan_resource(resource_id)
+    if not resource or resource["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="resource not found")
+    db.delete_plan_resource(resource_id)
+    return {"deleted": True}
+
+
+@app.get("/api/projects/{project_id}/planning/machines")
+def list_plan_machines(project_id: str):
+    _project_or_404(project_id)
+    return db.list_plan_machines(project_id)
+
+
+@app.post("/api/projects/{project_id}/planning/machines")
+def create_plan_machine(project_id: str, body: PlanMachineBody):
+    _project_or_404(project_id)
+    _validate_plan_numbers(available_hours=body.available_hours, utilization_floor=body.utilization_floor)
+    return db.create_plan_machine(project_id, body.name, body.available_hours, body.utilization_floor, body.asset_name)
+
+
+@app.put("/api/projects/{project_id}/planning/machines/{machine_id}")
+def update_plan_machine(project_id: str, machine_id: str, body: PlanMachineBody):
+    _project_or_404(project_id)
+    _validate_plan_numbers(available_hours=body.available_hours, utilization_floor=body.utilization_floor)
+    machine = db.get_plan_machine(machine_id)
+    if not machine or machine["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="machine not found")
+    return db.update_plan_machine(machine_id, body.name, body.available_hours, body.utilization_floor, body.asset_name)
+
+
+@app.delete("/api/projects/{project_id}/planning/machines/{machine_id}")
+def delete_plan_machine(project_id: str, machine_id: str):
+    _project_or_404(project_id)
+    machine = db.get_plan_machine(machine_id)
+    if not machine or machine["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="machine not found")
+    db.delete_plan_machine(machine_id)
+    return {"deleted": True}
+
+
+@app.get("/api/projects/{project_id}/planning/consumption")
+def get_plan_consumption(project_id: str):
+    _project_or_404(project_id)
+    return db.list_plan_consumption(project_id)
+
+
+@app.put("/api/projects/{project_id}/planning/consumption")
+def put_plan_consumption(project_id: str, body: SetConsumptionBody):
+    _project_or_404(project_id)
+    product_ids = {p["id"] for p in db.list_plan_products(project_id)}
+    resource_ids = {r["id"] for r in db.list_plan_resources(project_id)}
+    seen = set()
+    for cell in body.cells:
+        _validate_plan_numbers(per_unit=cell.per_unit)
+        if cell.product_id not in product_ids:
+            raise HTTPException(status_code=400, detail=f"unknown product_id {cell.product_id!r} for this project")
+        if cell.resource_id not in resource_ids:
+            raise HTTPException(status_code=400, detail=f"unknown resource_id {cell.resource_id!r} for this project")
+        key = (cell.product_id, cell.resource_id)
+        if key in seen:
+            raise HTTPException(status_code=400, detail=f"duplicate cell for product/resource pair {key!r}")
+        seen.add(key)
+    db.set_plan_consumption(project_id, [c.model_dump() for c in body.cells])
+    return db.list_plan_consumption(project_id)
+
+
+@app.get("/api/projects/{project_id}/planning/machine-compatibility")
+def get_plan_machine_compatibility(project_id: str):
+    _project_or_404(project_id)
+    return db.list_plan_machine_compatibility(project_id)
+
+
+@app.put("/api/projects/{project_id}/planning/machine-compatibility")
+def put_plan_machine_compatibility(project_id: str, body: SetCompatibilityBody):
+    _project_or_404(project_id)
+    product_ids = {p["id"] for p in db.list_plan_products(project_id)}
+    machine_ids = {m["id"] for m in db.list_plan_machines(project_id)}
+    seen = set()
+    for cell in body.cells:
+        _validate_plan_numbers(hours_per_unit=cell.hours_per_unit)
+        if cell.hours_per_unit <= 0:
+            raise HTTPException(status_code=400, detail="hours_per_unit must be positive — omit the cell to express incompatibility")
+        if cell.product_id not in product_ids:
+            raise HTTPException(status_code=400, detail=f"unknown product_id {cell.product_id!r} for this project")
+        if cell.machine_id not in machine_ids:
+            raise HTTPException(status_code=400, detail=f"unknown machine_id {cell.machine_id!r} for this project")
+        key = (cell.product_id, cell.machine_id)
+        if key in seen:
+            raise HTTPException(status_code=400, detail=f"duplicate cell for product/machine pair {key!r}")
+        seen.add(key)
+    db.set_plan_machine_compatibility(project_id, [c.model_dump() for c in body.cells])
+    return db.list_plan_machine_compatibility(project_id)
+
+
+def _resolve_planning_settings(project_id: str) -> dict:
+    raw = db.get_settings(project_id)
+    return {
+        "objective": raw.get("planning.objective", "maximize_profit"),
+        "toggles": {
+            "demand_ceiling": raw.get("planning.constraint.demand_ceiling", "false") == "true",
+            "min_committed_order": raw.get("planning.constraint.min_committed_order", "false") == "true",
+            "pooled_resources": raw.get("planning.constraint.pooled_resources", "false") == "true",
+            "batch_size": raw.get("planning.constraint.batch_size", "false") == "true",
+            "utilization_floor": raw.get("planning.constraint.utilization_floor", "false") == "true",
+        },
+    }
+
+
+@app.get("/api/projects/{project_id}/planning/settings")
+def get_planning_settings(project_id: str):
+    _project_or_404(project_id)
+    resolved = _resolve_planning_settings(project_id)
+    return {"objective": resolved["objective"], **resolved["toggles"]}
+
+
+@app.put("/api/projects/{project_id}/planning/settings")
+def put_planning_settings(project_id: str, body: PlanningSettingsBody):
+    _project_or_404(project_id)
+    if body.objective not in _PLANNING_OBJECTIVES:
+        raise HTTPException(status_code=400, detail=f"objective must be one of {_PLANNING_OBJECTIVES}")
+    db.set_setting(project_id, "planning.objective", body.objective)
+    for key, value in (
+        ("planning.constraint.demand_ceiling", body.demand_ceiling),
+        ("planning.constraint.min_committed_order", body.min_committed_order),
+        ("planning.constraint.pooled_resources", body.pooled_resources),
+        ("planning.constraint.batch_size", body.batch_size),
+        ("planning.constraint.utilization_floor", body.utilization_floor),
+    ):
+        db.set_setting(project_id, key, "true" if value else "false")
+    resolved = _resolve_planning_settings(project_id)
+    return {"objective": resolved["objective"], **resolved["toggles"]}
+
+
+def _primary_downtime_estimate(project_id: str, machine: dict) -> float | None:
+    """Dormant hook. Always returns None today. Once a project has real
+    historical failure-event-log data, this would look up a succeeded
+    training run for a dedicated objective (e.g. "machine_failure_risk") and
+    convert its predicted failure-probability/RUL-hours output for this
+    machine into a downtime-hours number — reusing computation_engine's
+    existing train_supervised mechanism, the same way any other labeled
+    prediction already does. Not built now: no real historical failure-event
+    data exists anywhere in this codebase to label a model with yet."""
+    return None
+
+
+def _apply_downtime(project_id: str, machine: dict) -> dict:
+    """Two-tier, always automatic, never blocking: real prediction if it
+    exists (dormant today), else a rough 0%/15%/30% capacity cut derived from
+    the maintenance objective's own already-computed per-machine drift
+    status — never a fabricated probability. No machine ever loses capacity
+    for a reason nobody can trace back to real data."""
+    primary = _primary_downtime_estimate(project_id, machine)
+    if primary is not None:
+        return {**machine, "downtime_hours": primary, "downtime_tier": "primary"}
+
+    if not machine.get("asset_name"):
+        return {**machine, "downtime_hours": 0.0, "downtime_tier": "none"}
+
+    maint_result = _latest_succeeded_result(project_id, "maintenance")
+    if not maint_result:
+        return {**machine, "downtime_hours": 0.0, "downtime_tier": "none"}
+
+    signal_asset_map = {s: a for a, sigs in store.signals_by_asset(project_id).items() for s in sigs}
+    card = summarize_maintenance({"result": maint_result}, signal_asset_map)
+    machine_entry = next((m for m in card.data.get("machines", []) if m["item_id"] == machine["asset_name"]), None)
+    if machine_entry is None:
+        return {**machine, "downtime_hours": 0.0, "downtime_tier": "none"}
+
+    worst_frac = max(
+        (
+            it["frac"] for it in card.data.get("items", [])
+            if signal_asset_map.get(it["item_id"]) == machine["asset_name"]
+        ),
+        default=0.0,
+    )
+    fraction = 0.0 if machine_entry["status"] == "ok" else (0.15 if worst_frac < 0.5 else 0.30)
+    return {
+        **machine, "downtime_hours": fraction * machine["available_hours"], "downtime_tier": "fallback",
+    }
+
+
+def _estimate_defect_rate(project_id: str) -> tuple[float, dict | None]:
+    """Same two-tier honesty as downtime. A real predicted-defect-rate model
+    doesn't exist either — the 'quality' objective is the same drift-detection
+    forecast as maintenance, not a defect-rate regression. Derives one
+    project-wide rough estimate from the worst currently-drifting quality
+    signal, using the exact same 0%/15%/30% buckets as downtime — no reason
+    to invent a second set of thresholds."""
+    quality_result = _latest_succeeded_result(project_id, "quality")
+    if not quality_result:
+        return 0.0, None
+    card = summarize_deviation("quality", {"result": quality_result}, unit_word="day", item_word="quality signal")
+    items = card.data.get("items", [])
+    if not items:
+        return 0.0, None
+    worst = max(items, key=lambda it: it["frac"])
+    if worst["status"] == "ok":
+        return 0.0, None
+    fraction = 0.15 if worst["frac"] < 0.5 else 0.30
+    return fraction, {"worst_signal": worst["item_id"], "frac": worst["frac"], "estimated_defect_rate": fraction}
+
+
+@app.post("/api/projects/{project_id}/planning/solve")
+def solve_plan(project_id: str):
+    _project_or_404(project_id)
+    products = db.list_plan_products(project_id)
+    machines = db.list_plan_machines(project_id)
+    resources = db.list_plan_resources(project_id)
+    compatibility_rows = db.list_plan_machine_compatibility(project_id)
+    consumption_rows = db.list_plan_consumption(project_id)
+    compatibility = {(c["product_id"], c["machine_id"]): c["hours_per_unit"] for c in compatibility_rows}
+    consumption = {(c["product_id"], c["resource_id"]): c["per_unit"] for c in consumption_rows}
+
+    settings = _resolve_planning_settings(project_id)
+    machines_with_downtime = [_apply_downtime(project_id, m) for m in machines]
+    defect_rate, defect_detail = _estimate_defect_rate(project_id)
+
+    try:
+        outcome = solve_production_mix(
+            products, machines_with_downtime, resources, compatibility, consumption,
+            objective=settings["objective"], toggles=settings["toggles"], defect_rate=defect_rate,
+        )
+    except Exception as exc:  # noqa: BLE001 — the run row is the error channel
+        outcome = {"verdict": "error", "message": str(exc)}
+
+    return db.create_plan_run(
+        project_id, status=outcome["verdict"],
+        result={
+            "inputs": {
+                "products": products, "machines": machines_with_downtime, "resources": resources,
+                "compatibility": compatibility_rows, "consumption": consumption_rows,
+                "settings": settings, "defect_detail": defect_detail,
+            },
+            "output": outcome,
+        },
+        total_profit=outcome.get("objective_value") if settings["objective"] == "maximize_profit" else None,
+        objective=settings["objective"], objective_value=outcome.get("objective_value"),
+    )
+
+
+@app.get("/api/projects/{project_id}/planning/runs")
+def list_plan_runs(project_id: str):
+    _project_or_404(project_id)
+    return db.list_plan_runs(project_id)
+
+
+@app.get("/api/projects/{project_id}/planning/runs/{run_id}")
+def get_plan_run(project_id: str, run_id: str):
+    _project_or_404(project_id)
+    run = db.get_plan_run(run_id)
+    if not run or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="plan run not found")
+    return run
 
 
 # ---- Computation Engine (C) -------------------------------------------------
@@ -684,42 +1049,6 @@ def _train_all_objectives(project_id: str) -> None:
         _execute_training_run(run_id, project_id, objective, model_dir)
 
 
-def _execute_structure_request_approval(request_id: str, project_id: str, filenames: list[str]) -> None:
-    """Option A: run discovery on the newly-attached files; if it raises zero review
-    questions, auto-confirm a new version and retrain everything; if it raises any,
-    stop and hand the request off to the Super Admin's review queue. Adding a machine
-    is exactly when 'same machine or a new one?' merges matter, so those never
-    auto-apply."""
-
-    def after_discovery(pending_count):
-        if pending_count is None:
-            err = _discovery_progress.get(project_id, {}).get("error", "discovery failed")
-            db.set_structure_request_stage(request_id, "failed", f"Discovery failed: {err}")
-            return
-        if pending_count > 0:
-            db.set_structure_request_stage(
-                request_id, "needs_review",
-                f"Discovery raised {pending_count} question(s) — open the company's workbench to review, "
-                "then confirm the version.",
-            )
-            return
-        # Clean add: no questions, safe to confirm and retrain automatically.
-        try:
-            snapshot = store.fetch_graph(project_id)
-            version = db.confirm_version(project_id, snapshot)
-            db.set_structure_request_stage(
-                request_id, "trained",
-                f"Auto-confirmed version {version['version_number']} and retrained all objectives.",
-            )
-            _train_all_objectives(project_id)
-        except Exception as exc:  # noqa: BLE001
-            db.set_structure_request_stage(request_id, "failed", f"Auto-confirm/retrain failed: {exc}")
-
-    _discovery_progress[project_id] = _fresh_progress()
-    db.set_structure_request_stage(request_id, "running", "Approved — running discovery on the new data.")
-    _execute_discovery_run(project_id, filenames, on_complete=after_discovery)
-
-
 class StartTrainingRequest(BaseModel):
     objective: str = "maintenance"
 
@@ -804,8 +1133,16 @@ def _card_for_objective(project_id: str, objective: str) -> dict:
     run = db.get_training_run(latest_done["id"])
     settings = db.get_settings(project_id) if objective == "inventory" else None
     upload_dir = UPLOAD_ROOT / project_id if objective == "delivery_date" else None
+    signal_asset_map = None
+    if objective == "maintenance":
+        # Invert asset -> [signals] into signal -> asset: what the maintenance
+        # card needs is "which machine does THIS signal belong to", straight
+        # from the confirmed graph's own MEASURES links — never guessed.
+        signal_asset_map = {
+            signal: asset for asset, signals in store.signals_by_asset(project_id).items() for signal in signals
+        }
     try:
-        card: Card = SUMMARIZERS[objective](run, settings=settings, upload_dir=upload_dir)
+        card: Card = SUMMARIZERS[objective](run, settings=settings, upload_dir=upload_dir, signal_asset_map=signal_asset_map)
     except Exception as exc:  # noqa: BLE001 — surface narration failures honestly, never silently
         return {**base, "status": "error", "headline": "Could not summarize the latest result.",
                 "facts": [str(exc)], "data": {}, "actions": [], "run_id": run["id"]}

@@ -2,18 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, clearToken, type Project, type StructureRequest } from "@/lib/api";
+import { api, clearToken, type Project } from "@/lib/api";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { AdminShell, AdminStat, type ShellNavItem } from "@/components/AdminShell";
-
-type View = "companies" | "requests";
 
 export default function SuperAdminHome() {
   const router = useRouter();
   const { user, loading } = useAuthGuard({ requiredRole: "super_admin" });
-  const [view, setView] = useState<View>("companies");
   const [projects, setProjects] = useState<Project[] | null>(null);
-  const [requests, setRequests] = useState<StructureRequest[]>([]);
   const [showOnboard, setShowOnboard] = useState(false);
   const [name, setName] = useState("");
   const [industry, setIndustry] = useState("");
@@ -26,9 +22,7 @@ export default function SuperAdminHome() {
 
   async function load() {
     try {
-      const [p, r] = await Promise.all([api.listProjects(), api.listAllStructureRequests()]);
-      setProjects(p);
-      setRequests(r);
+      setProjects(await api.listProjects());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not reach the API");
     }
@@ -40,15 +34,6 @@ export default function SuperAdminHome() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!loading && user) load();
   }, [loading, user]);
-
-  // While an approved request's auto-pipeline is running, poll so its stage
-  // (discovery → trained / needs-review) updates on screen without a manual refresh.
-  const anyRunning = requests.some((r) => r.pipeline_stage === "running");
-  useEffect(() => {
-    if (!anyRunning) return;
-    const t = setInterval(() => load(), 3000);
-    return () => clearInterval(t);
-  }, [anyRunning]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -77,23 +62,22 @@ export default function SuperAdminHome() {
         load();
         return;
       }
+      // The Company Admin takes it from here — they log in and build their own
+      // structure, data, and training. Nothing left for the Super Admin to do
+      // but come back to watch the activity feed.
       setName("");
       setIndustry("");
       setMachineCapacity("");
       setAdminName("");
       setAdminEmail("");
       setAdminPassword("");
-      router.push(`/projects/${project.id}`);
+      setShowOnboard(false);
+      load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create company");
     } finally {
       setCreating(false);
     }
-  }
-
-  async function handleResolve(id: string, status: "approved" | "rejected") {
-    await api.resolveStructureRequest(id, status);
-    load();
   }
 
   function handleLogout() {
@@ -105,7 +89,6 @@ export default function SuperAdminHome() {
     return <div className="min-h-screen flex items-center justify-center text-sm text-[var(--text-faint)]">Loading…</div>;
   }
 
-  const pendingCount = requests.filter((r) => r.status === "pending").length;
   const liveCount = (projects ?? []).filter((p) => p.latest_version).length;
   const onboardingCount = (projects ?? []).length - liveCount;
   const machinesUnderContract = (projects ?? []).reduce((sum, p) => sum + (p.machine_capacity ?? 0), 0);
@@ -119,8 +102,7 @@ export default function SuperAdminHome() {
   }
 
   const nav: ShellNavItem[] = [
-    { label: "Client companies", icon: "apartment", active: view === "companies", onClick: () => setView("companies") },
-    { label: "Structure requests", icon: "inbox", active: view === "requests", badge: pendingCount || undefined, onClick: () => setView("requests") },
+    { label: "Client companies", icon: "apartment", active: true, onClick: () => {} },
   ];
 
   const dotClass: Record<string, string> = {
@@ -135,23 +117,17 @@ export default function SuperAdminHome() {
       nav={nav}
       userEmail={user.email}
       onLogout={handleLogout}
-      title={view === "companies" ? "Client companies" : "Structure-change requests"}
+      title="Client companies"
     >
       {error && <div className="bg-white rounded-xl border border-[var(--danger)] p-4 mb-6 text-sm text-[var(--danger)]">{error}</div>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
         <AdminStat
           label="Client companies"
           value={String(projects?.length ?? "—")}
           sub={projects ? `${liveCount} live · ${onboardingCount} onboarding` : undefined}
         />
         <AdminStat label="Machines under contract" value={String(machinesUnderContract)} sub="across all clients" />
-        <AdminStat
-          label="Pending requests"
-          value={String(pendingCount)}
-          sub="structure changes to review"
-          tone={pendingCount ? "watch" : "ok"}
-        />
         <AdminStat
           label="Data health"
           value={dataHealthPct === null ? "—" : `${dataHealthPct}%`}
@@ -160,8 +136,7 @@ export default function SuperAdminHome() {
         />
       </div>
 
-      {view === "companies" && (
-        <div className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-5">
+      <div className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-5">
           <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
             <div>
               <h3 className="text-sm font-extrabold">Companies on the platform</h3>
@@ -274,8 +249,8 @@ export default function SuperAdminHome() {
                         {p.latest_version ? `v${p.latest_version}` : "draft"}
                       </td>
                       <td className="py-3 text-right">
-                        <button className="btn btn-outline" onClick={() => router.push(`/projects/${p.id}`)}>
-                          {p.latest_version ? "Open" : "Continue setup"}
+                        <button className="btn btn-outline" onClick={() => router.push(`/companies/${p.id}`)}>
+                          Open
                           <span className="material-symbols-outlined text-[16px] ml-1">arrow_forward</span>
                         </button>
                       </td>
@@ -293,92 +268,6 @@ export default function SuperAdminHome() {
             </table>
           </div>
         </div>
-      )}
-
-      {view === "requests" && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-5">
-            <h3 className="text-sm font-extrabold mb-3">Pending your review</h3>
-            {requests.filter((r) => r.status === "pending").length === 0 && (
-              <p className="text-sm text-[var(--text-faint)]">No pending requests.</p>
-            )}
-            <div className="space-y-3">
-              {requests
-                .filter((r) => r.status === "pending")
-                .map((r) => (
-                  <div key={r.id} className="bg-[var(--surface-2)] rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-3">
-                      <span className="w-10 h-10 rounded-lg bg-[var(--warning-soft)] text-[var(--warning)] flex items-center justify-center flex-none">
-                        <span className="material-symbols-outlined text-[20px]">precision_manufacturing</span>
-                      </span>
-                      <div>
-                        <div className="font-semibold text-sm">{r.description}</div>
-                        <div className="text-xs text-[var(--text-faint)]">
-                          requested by {r.requested_by} · {new Date(r.created_at).toLocaleString()}
-                          {r.attached_files.length > 0 && ` · ${r.attached_files.length} file(s) attached`}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button className="btn btn-outline" onClick={() => handleResolve(r.id, "rejected")}>
-                        Reject
-                      </button>
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => handleResolve(r.id, "approved")}
-                        disabled={r.attached_files.length === 0}
-                        title={r.attached_files.length === 0 ? "No data attached — nothing to add" : ""}
-                      >
-                        Approve &amp; add
-                      </button>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-
-          {requests.some((r) => r.status !== "pending") && (
-            <div className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-5">
-              <h3 className="text-sm font-extrabold mb-3">Already handled</h3>
-              <div className="space-y-2">
-                {requests
-                  .filter((r) => r.status !== "pending")
-                  .map((r) => {
-                    const stage = r.pipeline_stage;
-                    const badge =
-                      r.status === "rejected"
-                        ? { cls: "badge-rejected", label: "rejected" }
-                        : stage === "running"
-                        ? { cls: "badge-pending", label: "discovery running…" }
-                        : stage === "needs_review"
-                        ? { cls: "badge-pending", label: "needs review" }
-                        : stage === "trained"
-                        ? { cls: "badge-confirmed", label: "added & retrained" }
-                        : stage === "failed"
-                        ? { cls: "badge-rejected", label: "failed" }
-                        : { cls: "badge-confirmed", label: "approved" };
-                    return (
-                      <div key={r.id} className="border-b border-[var(--border)] last:border-0 pb-2 last:pb-0">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-medium">{r.description}</div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className={`badge ${badge.cls}`}>{badge.label}</span>
-                            {stage === "needs_review" && (
-                              <button className="btn btn-outline" onClick={() => router.push(`/projects/${r.project_id}`)}>
-                                Review now
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        {r.resolution_note && <p className="text-xs text-[var(--text-muted)] mt-1">{r.resolution_note}</p>}
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </AdminShell>
   );
 }

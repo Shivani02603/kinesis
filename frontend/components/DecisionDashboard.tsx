@@ -75,6 +75,10 @@ type DeviationItem = {
   pct_change: number;
 };
 
+// A machine's health is the worst of its own signals' — one entry here can
+// cover several DeviationItem rows (its signals), never one row per signal.
+type MachineSummary = { item_id: string; status: "ok" | "watch"; signals: string[] };
+
 type InventoryItem = {
   material: string;
   configured: boolean;
@@ -101,8 +105,12 @@ type ScheduleOrderRow = {
   tasks: ScheduleTaskRow[];
 };
 
-function deviationItems(card: DashboardCard | undefined): DeviationItem[] {
-  return ((card?.data as { items?: DeviationItem[] })?.items ?? []);
+function machineSummaries(card: DashboardCard | undefined): MachineSummary[] {
+  return ((card?.data as { machines?: MachineSummary[] })?.machines ?? []);
+}
+
+function loneSignals(card: DashboardCard | undefined): DeviationItem[] {
+  return ((card?.data as { lone_signals?: DeviationItem[] })?.lone_signals ?? []);
 }
 
 function inventoryItems(card: DashboardCard | undefined): InventoryItem[] {
@@ -491,12 +499,32 @@ function DeviationOverviewList({ items, unitWord }: { items: DeviationItem[]; un
 }
 
 function MachineHealthPage({ card, graph }: { card: DashboardCard; graph: GraphData | null }) {
-  const data = card.data as { series?: ForecastSeries[]; items?: DeviationItem[]; flagged_item?: string | null; recent_alerts?: AlertRow[] };
+  const data = card.data as {
+    series?: ForecastSeries[]; items?: DeviationItem[]; flagged_item?: string | null; recent_alerts?: AlertRow[];
+    machines?: MachineSummary[]; lone_signals?: DeviationItem[];
+  };
   const series = data.series ?? [];
   const items = data.items ?? [];
   const alerts = data.recent_alerts ?? [];
-  const watch = items.filter((i) => i.status === "watch");
+  const machines = data.machines ?? [];
+  const unlinked = data.lone_signals ?? [];
   const lineAssets = graph?.nodes.filter((n) => n.label === "Asset").length ?? 0;
+
+  // The top tile counts real machines (grouping a machine's own signals
+  // together), falling back to signals only when nothing is linked to a
+  // machine at all — never signal-count mislabeled as machine-count.
+  const monitoredLabel = machines.length > 0 ? "Machines monitored" : "Signals monitored";
+  const monitoredValue = machines.length > 0 ? machines.length : unlinked.length;
+  const monitoredSub =
+    machines.length > 0 && unlinked.length > 0
+      ? `+ ${unlinked.length} unlinked signal(s)`
+      : machines.length > 0 && lineAssets
+      ? `of ${lineAssets} on the line`
+      : undefined;
+  const watchMachines = machines.filter((m) => m.status === "watch").length;
+  const watchUnlinked = unlinked.filter((i) => i.status === "watch").length;
+  const totalWatch = watchMachines + watchUnlinked;
+  const totalMonitored = machines.length + unlinked.length;
 
   const flagged = data.flagged_item ? series.find((s) => s.item_id === data.flagged_item) : series[0];
 
@@ -504,9 +532,9 @@ function MachineHealthPage({ card, graph }: { card: DashboardCard; graph: GraphD
     <div className="space-y-4">
       <StatRow
         stats={[
-          { label: "Machines monitored", value: String(items.length), sub: lineAssets ? `of ${lineAssets} on the line` : undefined, icon: "sensors" },
-          { label: "Needs attention", value: String(watch.length), tone: watch.length ? "watch" : "neutral", icon: "warning" },
-          { label: "All normal", value: String(items.length - watch.length), tone: "ok", icon: "check_circle" },
+          { label: monitoredLabel, value: String(monitoredValue), sub: monitoredSub, icon: "sensors" },
+          { label: "Needs attention", value: String(totalWatch), tone: totalWatch ? "watch" : "neutral", icon: "warning" },
+          { label: "All normal", value: String(totalMonitored - totalWatch), tone: "ok", icon: "check_circle" },
         ]}
       />
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
@@ -1700,11 +1728,14 @@ function overviewStats(cards: DashboardCard[]): Stat[] {
   }
 
   const maint = byObjective.get("maintenance");
-  const mItems = deviationItems(maint);
-  if (mItems.length > 0) {
-    const watch = mItems.filter((i) => i.status === "watch").length;
+  const mMachines = machineSummaries(maint);
+  const mUnlinked = loneSignals(maint);
+  const mTotal = mMachines.length + mUnlinked.length;
+  if (mTotal > 0) {
+    const watch = mMachines.filter((m) => m.status === "watch").length + mUnlinked.filter((s) => s.status === "watch").length;
     stats.push({
-      label: "Machines need attention", value: String(watch), sub: `of ${mItems.length} monitored`,
+      label: mMachines.length > 0 ? "Machines need attention" : "Signals need attention",
+      value: String(watch), sub: `of ${mTotal} monitored`,
       tone: watch ? "watch" : "ok", icon: "precision_manufacturing",
     });
   }

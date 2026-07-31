@@ -368,19 +368,52 @@ export const api = {
   refreshDataSource: (projectId: string) =>
     request<RefreshSummary>(`/api/projects/${projectId}/data-source/refresh`, { method: "POST" }),
 
-  createStructureRequest: (projectId: string, description: string, attachedFiles: string[] = []) =>
-    request<StructureRequest>(`/api/projects/${projectId}/structure-requests`, {
-      method: "POST",
-      body: JSON.stringify({ description, attached_files: attachedFiles }),
+  getActivity: (projectId: string) => request<ActivityEntry[]>(`/api/projects/${projectId}/activity`),
+
+  listPlanProducts: (projectId: string) => request<PlanProduct[]>(`/api/projects/${projectId}/planning/products`),
+  createPlanProduct: (projectId: string, body: PlanProductInput) =>
+    request<PlanProduct>(`/api/projects/${projectId}/planning/products`, { method: "POST", body: JSON.stringify(body) }),
+  updatePlanProduct: (projectId: string, productId: string, body: PlanProductInput) =>
+    request<PlanProduct>(`/api/projects/${projectId}/planning/products/${productId}`, { method: "PUT", body: JSON.stringify(body) }),
+  deletePlanProduct: (projectId: string, productId: string) =>
+    request<{ deleted: boolean }>(`/api/projects/${projectId}/planning/products/${productId}`, { method: "DELETE" }),
+
+  listPlanResources: (projectId: string) => request<PlanResource[]>(`/api/projects/${projectId}/planning/resources`),
+  createPlanResource: (projectId: string, body: PlanResourceInput) =>
+    request<PlanResource>(`/api/projects/${projectId}/planning/resources`, { method: "POST", body: JSON.stringify(body) }),
+  updatePlanResource: (projectId: string, resourceId: string, body: PlanResourceInput) =>
+    request<PlanResource>(`/api/projects/${projectId}/planning/resources/${resourceId}`, { method: "PUT", body: JSON.stringify(body) }),
+  deletePlanResource: (projectId: string, resourceId: string) =>
+    request<{ deleted: boolean }>(`/api/projects/${projectId}/planning/resources/${resourceId}`, { method: "DELETE" }),
+
+  getPlanConsumption: (projectId: string) => request<PlanConsumptionCell[]>(`/api/projects/${projectId}/planning/consumption`),
+  setPlanConsumption: (projectId: string, cells: PlanConsumptionCell[]) =>
+    request<PlanConsumptionCell[]>(`/api/projects/${projectId}/planning/consumption`, {
+      method: "PUT", body: JSON.stringify({ cells }),
     }),
-  listProjectStructureRequests: (projectId: string) =>
-    request<StructureRequest[]>(`/api/projects/${projectId}/structure-requests`),
-  listAllStructureRequests: () => request<StructureRequest[]>("/api/structure-requests"),
-  resolveStructureRequest: (requestId: string, status: "approved" | "rejected", note?: string) =>
-    request<StructureRequest>(`/api/structure-requests/${requestId}/resolve`, {
-      method: "POST",
-      body: JSON.stringify({ status, resolution_note: note ?? null }),
+
+  listPlanMachines: (projectId: string) => request<PlanMachine[]>(`/api/projects/${projectId}/planning/machines`),
+  createPlanMachine: (projectId: string, body: PlanMachineInput) =>
+    request<PlanMachine>(`/api/projects/${projectId}/planning/machines`, { method: "POST", body: JSON.stringify(body) }),
+  updatePlanMachine: (projectId: string, machineId: string, body: PlanMachineInput) =>
+    request<PlanMachine>(`/api/projects/${projectId}/planning/machines/${machineId}`, { method: "PUT", body: JSON.stringify(body) }),
+  deletePlanMachine: (projectId: string, machineId: string) =>
+    request<{ deleted: boolean }>(`/api/projects/${projectId}/planning/machines/${machineId}`, { method: "DELETE" }),
+
+  getPlanCompatibility: (projectId: string) =>
+    request<PlanCompatibilityCell[]>(`/api/projects/${projectId}/planning/machine-compatibility`),
+  setPlanCompatibility: (projectId: string, cells: PlanCompatibilityCell[]) =>
+    request<PlanCompatibilityCell[]>(`/api/projects/${projectId}/planning/machine-compatibility`, {
+      method: "PUT", body: JSON.stringify({ cells }),
     }),
+
+  getPlanningSettings: (projectId: string) => request<PlanningSettings>(`/api/projects/${projectId}/planning/settings`),
+  setPlanningSettings: (projectId: string, body: PlanningSettings) =>
+    request<PlanningSettings>(`/api/projects/${projectId}/planning/settings`, { method: "PUT", body: JSON.stringify(body) }),
+
+  solvePlan: (projectId: string) => request<PlanRun>(`/api/projects/${projectId}/planning/solve`, { method: "POST" }),
+  listPlanRuns: (projectId: string) => request<PlanRun[]>(`/api/projects/${projectId}/planning/runs`),
+  getPlanRun: (projectId: string, runId: string) => request<PlanRun>(`/api/projects/${projectId}/planning/runs/${runId}`),
 };
 
 export type DataSourceFile = {
@@ -407,18 +440,126 @@ export type RefreshSummary = {
   files: { file: string; rows_added: number; latest_key: string | null }[];
 };
 
-export type StructureRequest = {
+// Read-only history for the Super Admin: what a Company Admin has done on
+// their own project — never something to approve or act on.
+export type ActivityEntry = {
   id: string;
   project_id: string;
-  requested_by: string;
-  description: string;
-  status: "pending" | "approved" | "rejected";
+  kind: "data_processed" | "version_confirmed" | "live_sync";
+  message: string;
   created_at: string;
-  resolved_at: string | null;
-  resolution_note: string | null;
-  attached_files: string[];
-  // Where the approve → auto-pipeline flow got to (Option A):
-  pipeline_stage: "running" | "needs_review" | "trained" | "failed" | null;
+};
+
+// ---- Production-mix planning ------------------------------------------
+
+// Price/cost replace a single profit input — profit is always price − cost,
+// computed server-side, never a number that could quietly disagree with them.
+export type PlanProductInput = {
+  name: string; price_per_unit: number; cost_per_unit: number;
+  demand_min?: number | null; demand_max?: number | null;
+  batch_min?: number | null; batch_max?: number | null;
+};
+export type PlanProduct = PlanProductInput & { id: string; project_id: string; created_at: string; profit_per_unit: number };
+
+export type PlanResourceInput = { name: string; unit: string; available_capacity: number; kind?: string | null };
+export type PlanResource = PlanResourceInput & { id: string; project_id: string; created_at: string };
+
+// Machines are distinct from Resources: a machine has downtime (from the
+// maintenance objective) and product-compatibility, neither of which mean
+// anything for a pooled resource like material or budget.
+export type PlanMachineInput = {
+  name: string; available_hours: number; utilization_floor?: number | null; asset_name?: string | null;
+};
+export type PlanMachine = PlanMachineInput & { id: string; project_id: string; created_at: string };
+
+export type PlanConsumptionCell = { product_id: string; resource_id: string; per_unit: number };
+export type PlanCompatibilityCell = { product_id: string; machine_id: string; hours_per_unit: number };
+
+export type PlanningSettings = {
+  objective: string;
+  demand_ceiling: boolean;
+  min_committed_order: boolean;
+  pooled_resources: boolean;
+  batch_size: boolean;
+  utilization_floor: boolean;
+};
+
+export const PLANNING_OBJECTIVES: { slug: string; label: string }[] = [
+  { slug: "maximize_profit", label: "Maximize profit" },
+  { slug: "maximize_revenue", label: "Maximize revenue" },
+  { slug: "minimize_cost", label: "Minimize total cost" },
+  { slug: "maximize_utilization", label: "Maximize machine utilization" },
+  { slug: "maximize_throughput", label: "Maximize throughput (total units)" },
+  { slug: "minimize_makespan", label: "Minimize makespan (machine-load proxy)" },
+];
+
+export type PlanProductResult = {
+  product_id: string; name: string; quantity: number; by_machine: Record<string, number>;
+  profit_per_unit: number; profit_contribution: number;
+  demand_min: number | null; demand_max: number | null;
+  raw_floor: number; production_target: number | null; demand_fulfillment_pct: number | null;
+};
+
+export type PlanMachineResult = {
+  machine_id: string; name: string; used_hours: number; available_hours: number;
+  downtime_hours: number; downtime_tier: "primary" | "fallback" | "none";
+  utilization_pct: number; binding: boolean; shadow_price: number;
+};
+
+export type PlanResourceResult = {
+  resource_id: string; name: string; unit: string;
+  used: number; available: number; binding: boolean; shadow_price: number;
+};
+
+export type PlanQualityRiskRow = {
+  product_id: string; name: string; raw_floor: number; inflated_floor: number; extra_units: number;
+};
+
+// Every verdict is its own union member (never combined, e.g. never
+// `"empty" | "error"` sharing one member) — TypeScript's control-flow
+// narrowing across sequential `if (x.verdict === ...) return` checks does
+// NOT reliably exclude one literal out of a combined-literal member.
+export type PlanConflict =
+  | {
+      kind: "capacity"; row_type: "resource" | "machine"; row_id: string; row_name: string; unit: string;
+      available: number; minimum_required: number;
+      driven_by: { product_id: string; product_name: string; demand_min: number; per_unit: number; contribution: number }[];
+    }
+  | { kind: "no_compatible_machine"; product_id: string; product_name: string; required: number }
+  | { kind: "utilization_floor_unreachable"; machine_id: string; machine_name: string; floor_required_hours: number; max_achievable_hours: number };
+
+export type PlanOutcome =
+  | {
+      verdict: "solved"; solver_status: string; objective: string; objective_label: string; objective_value: number;
+      degenerate_note: string | null;
+      products: PlanProductResult[]; machines: PlanMachineResult[]; resources: PlanResourceResult[];
+      quality_risk: PlanQualityRiskRow[];
+    }
+  | { verdict: "infeasible"; message: string; conflicts: PlanConflict[] }
+  | { verdict: "missing_inputs"; message: string; products: { product_id: string; product_name: string; missing_field: string }[] }
+  | { verdict: "empty"; message: string }
+  | { verdict: "error"; message: string };
+
+export type PlanRun = {
+  id: string;
+  project_id: string;
+  status: string;
+  error: string | null;
+  created_at: string;
+  total_profit: number | null;
+  objective: string | null;
+  objective_value: number | null;
+  // Only present on a single-run fetch (getPlanRun/solvePlan) — list_plan_runs
+  // omits it, same as training runs, to keep the history list cheap.
+  result?: {
+    inputs: {
+      products: PlanProduct[]; machines: PlanMachineResult[]; resources: PlanResource[];
+      compatibility: PlanCompatibilityCell[]; consumption: PlanConsumptionCell[];
+      settings: { objective: string; toggles: Record<string, boolean> };
+      defect_detail: { worst_signal: string; frac: number; estimated_defect_rate: number } | null;
+    };
+    output: PlanOutcome;
+  };
 };
 
 export const OBJECTIVES: { slug: string; label: string }[] = [

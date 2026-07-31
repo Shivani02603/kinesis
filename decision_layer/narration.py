@@ -125,8 +125,64 @@ def summarize_deviation(
     )
 
 
-def summarize_maintenance(run: dict) -> Card:
-    card = summarize_deviation("maintenance", run, unit_word="reading", item_word="machine")
+def summarize_maintenance(run: dict, signal_asset_map: dict[str, str] | None = None) -> Card:
+    """Per-signal deviation is computed exactly as summarize_deviation always
+    has; what changes is how it's COUNTED. A machine's health is the worst of
+    its own signals' — two readings off the same furnace is one machine
+    needing attention, not two. signal_asset_map (signal name -> the real
+    Asset it measures, from the confirmed graph's own MEASURES links) is the
+    only source of that grouping — a signal with no entry in it is reported
+    honestly as its own signal, never invented as a machine the data never
+    named."""
+    signal_asset_map = signal_asset_map or {}
+    card = summarize_deviation("maintenance", run, unit_word="reading", item_word="signal")
+    if card.status in ("error", "info"):
+        return card  # no data / not enough history yet — nothing to group
+
+    items = card.data["items"]
+    machines: dict[str, list[dict]] = {}
+    lone_signals: list[dict] = []
+    for it in items:
+        asset = signal_asset_map.get(it["item_id"])
+        if asset:
+            machines.setdefault(asset, []).append(it)
+        else:
+            lone_signals.append(it)
+
+    machine_summaries = [
+        {
+            "item_id": asset,
+            "status": "watch" if any(s["status"] == "watch" for s in sigs) else "ok",
+            "signals": [s["item_id"] for s in sigs],
+        }
+        for asset, sigs in machines.items()
+    ]
+    watch_machines = [m for m in machine_summaries if m["status"] == "watch"]
+    watch_lone = [s for s in lone_signals if s["status"] == "watch"]
+
+    def _clause(total: list[dict], watch: list[dict], word: str, suffix: str = "") -> str:
+        # Singular items get their own name ("Furnace 1 has drifted…"), same
+        # convention summarize_deviation itself uses — "All 1 machine(s)" reads
+        # as awkwardly invented as the bug this whole function exists to fix.
+        if len(total) == 1:
+            name = total[0]["item_id"]
+            return f"{name} has drifted from its normal range{suffix}" if watch else f"{name} is within its normal range{suffix}"
+        if watch:
+            return f"{len(watch)} of {len(total)} {word}s have drifted from their normal range{suffix}"
+        return f"all {len(total)} {word}s are within their normal range{suffix}"
+
+    clauses = []
+    if machine_summaries:
+        clauses.append(_clause(machine_summaries, watch_machines, "machine"))
+    if lone_signals:
+        clauses.append(_clause(lone_signals, watch_lone, "signal", suffix=" (not linked to a specific machine)"))
+    headline = "; ".join(clauses)
+    headline = headline[0].upper() + headline[1:] + "."
+
+    card.headline = headline
+    card.status = "watch" if (watch_machines or watch_lone) else "ok"
+    card.data["machines"] = machine_summaries
+    card.data["lone_signals"] = lone_signals
     if card.status == "watch":
         card.actions = ["Create work order", "This was useful", "False alarm"]
     return card
@@ -391,7 +447,7 @@ def summarize_scheduling(run: dict) -> Card:
 
 
 SUMMARIZERS = {
-    "maintenance": lambda run, **kw: summarize_maintenance(run),
+    "maintenance": lambda run, signal_asset_map=None, **kw: summarize_maintenance(run, signal_asset_map),
     "quality": lambda run, **kw: summarize_quality(run),
     "demand_forecast": lambda run, **kw: summarize_demand(run),
     "delivery_date": lambda run, upload_dir=None, **kw: summarize_delivery(run, upload_dir),

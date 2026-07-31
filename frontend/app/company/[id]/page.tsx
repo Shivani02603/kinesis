@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, clearToken, type AuthUser, type DataSourceStatus, type GraphData, type Project, type StructureRequest } from "@/lib/api";
+import { api, clearToken, type AuthUser, type DataSourceStatus, type GraphData, type Project } from "@/lib/api";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { GraphView } from "@/components/GraphView";
+import { ProductionMixPanel } from "@/components/ProductionMixPanel";
 import { AdminShell, AdminStat, type ShellNavItem } from "@/components/AdminShell";
 
-type Tab = "overview" | "connections" | "people" | "graph";
+type Tab = "overview" | "connections" | "people" | "graph" | "planning";
 
 export default function CompanyAdminPage() {
   const params = useParams<{ id: string }>();
@@ -18,22 +19,19 @@ export default function CompanyAdminPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [graph, setGraph] = useState<GraphData>({ nodes: [], edges: [] });
   const [people, setPeople] = useState<AuthUser[]>([]);
-  const [requests, setRequests] = useState<StructureRequest[]>([]);
   const [tab, setTab] = useState<Tab>("overview");
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [p, g, u, r] = await Promise.all([
+      const [p, g, u] = await Promise.all([
         api.getProject(projectId),
         api.getGraph(projectId),
         api.listProjectUsers(projectId),
-        api.listProjectStructureRequests(projectId),
       ]);
       setProject(p);
       setGraph(g);
       setPeople(u);
-      setRequests(r);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load company data");
     }
@@ -61,13 +59,14 @@ export default function CompanyAdminPage() {
     return <div className="min-h-screen flex items-center justify-center text-sm text-[var(--text-faint)]">Loading…</div>;
   }
 
-  const pendingCount = requests.filter((r) => r.status === "pending").length;
   const stageCount = graph.nodes.filter((n) => n.label === "Stage").length;
   const assetCount = graph.nodes.filter((n) => n.label === "Asset").length;
   const signalCount = graph.nodes.filter((n) => n.label === "Signal").length;
 
   const nav: ShellNavItem[] = [
     { label: "Company console", icon: "space_dashboard", active: tab === "overview", onClick: () => setTab("overview") },
+    { label: "Structure & training", icon: "hub", onClick: () => router.push(`/projects/${projectId}`) },
+    { label: "Production Mix", icon: "calculate", active: tab === "planning", onClick: () => setTab("planning") },
     { label: "Data connections", icon: "cable", active: tab === "connections", onClick: () => setTab("connections") },
     { label: "People & roles", icon: "group", active: tab === "people", onClick: () => setTab("people") },
     { label: "Process map", icon: "account_tree", active: tab === "graph", onClick: () => setTab("graph") },
@@ -82,6 +81,7 @@ export default function CompanyAdminPage() {
     connections: { title: "Data connections" },
     people: { title: "People & roles" },
     graph: { title: "Process map", subtitle: project.latest_version ? `v${project.latest_version}` : "Not yet confirmed" },
+    planning: { title: "Production Mix", subtitle: "Plan what to make for maximum profit" },
   };
 
   return (
@@ -98,12 +98,11 @@ export default function CompanyAdminPage() {
         <OverviewTab
           project={project}
           people={people}
-          requests={requests}
-          pendingCount={pendingCount}
           onNavigate={setTab}
-          onChanged={refresh}
+          onOpenWorkbench={() => router.push(`/projects/${projectId}`)}
         />
       )}
+      {tab === "planning" && <ProductionMixPanel projectId={projectId} />}
       {tab === "connections" && <ConnectionsTab projectId={projectId} />}
       {tab === "people" && <PeopleTab projectId={projectId} people={people} onChanged={refresh} />}
       {tab === "graph" && (
@@ -126,47 +125,14 @@ export default function CompanyAdminPage() {
 function OverviewTab({
   project,
   people,
-  requests,
-  pendingCount,
   onNavigate,
-  onChanged,
+  onOpenWorkbench,
 }: {
   project: Project;
   people: AuthUser[];
-  requests: StructureRequest[];
-  pendingCount: number;
   onNavigate: (t: Tab) => void;
-  onChanged: () => void;
+  onOpenWorkbench: () => void;
 }) {
-  const [showRequestForm, setShowRequestForm] = useState(false);
-  const [description, setDescription] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const latest = requests[0];
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!description.trim() || files.length === 0) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      // Upload the new machine's data first so it's sitting in the project, then
-      // record its filenames on the request — approving the request is what runs
-      // discovery on exactly these files.
-      const { saved } = await api.uploadFiles(project.id, files);
-      await api.createStructureRequest(project.id, description.trim(), saved);
-      setDescription("");
-      setFiles([]);
-      setShowRequestForm(false);
-      onChanged();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not submit the request");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -176,13 +142,31 @@ function OverviewTab({
           value={project.latest_version ? `v${project.latest_version}` : "draft"}
           sub={project.latest_version ? "signed off" : "not yet confirmed"}
         />
-        <AdminStat label="Open requests" value={String(pendingCount)} sub="awaiting Kinesis" tone={pendingCount ? "watch" : "ok"} />
+        <AdminStat
+          label="Open review items"
+          value={String(project.pending_review_count ?? 0)}
+          sub="need your decision"
+          tone={project.pending_review_count ? "watch" : "ok"}
+        />
         <AdminStat label="Machines" value={`${project.asset_count ?? 0} / ${project.machine_capacity ?? "—"}`} sub="under contract" />
       </div>
 
       <div>
         <div className="text-xs uppercase font-bold text-[var(--text-faint)] mb-2 tracking-wide">Manage</div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <button onClick={onOpenWorkbench} className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-4 text-left">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="icon-tile bg-[var(--accent-soft)] text-[var(--accent)]">
+                <span className="material-symbols-outlined">hub</span>
+              </span>
+              <div>
+                <div className="font-bold text-sm">Structure &amp; training</div>
+                <div className="text-xs text-[var(--text-faint)]">add machines, train models</div>
+              </div>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mb-2">Upload new data, build the graph, and train — on your own.</p>
+            <span className="text-xs text-[var(--accent)] font-semibold">Open →</span>
+          </button>
           <button onClick={() => onNavigate("connections")} className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-4 text-left">
             <div className="flex items-center gap-3 mb-2">
               <span className="icon-tile bg-[var(--success-soft)] text-[var(--success)]">
@@ -223,78 +207,6 @@ function OverviewTab({
             <span className="text-xs text-[var(--accent)] font-semibold">Open →</span>
           </button>
         </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-card)] p-5">
-        <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
-          <div>
-            <h3 className="text-sm font-extrabold">Need a structure change?</h3>
-          </div>
-          <button className="btn btn-primary" onClick={() => setShowRequestForm((s) => !s)}>
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            New request
-          </button>
-        </div>
-
-        {showRequestForm && (
-          <form onSubmit={handleSubmit} className="bg-[var(--surface-2)] rounded-lg p-3 mb-3 space-y-2">
-            <textarea
-              className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white"
-              rows={3}
-              placeholder="Describe what changed on the floor…"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-            <div>
-              <label className="btn btn-outline cursor-pointer text-xs">
-                {files.length > 0 ? `${files.length} file(s) attached` : "Attach the new machine's data"}
-                <input
-                  type="file"
-                  multiple
-                  accept=".csv,.txt,.pdf"
-                  className="hidden"
-                  onChange={(e) => setFiles(e.target.files ? Array.from(e.target.files) : [])}
-                />
-              </label>
-              <p className="text-xs text-[var(--text-faint)] mt-1">
-                Machine list, sensor tags, routing, SOP — whatever describes the new machine. Kinesis reviews and trains it.
-                (CSV, PDF, TXT)
-              </p>
-            </div>
-            {files.length > 0 && (
-              <ul className="text-xs text-[var(--text-muted)] space-y-0.5">
-                {files.map((f) => (
-                  <li key={f.name} className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[14px] text-[var(--text-faint)]">draft</span>
-                    {f.name}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {error && <p className="text-xs text-[var(--danger)]">{error}</p>}
-            <button type="submit" className="btn btn-primary" disabled={submitting || !description.trim() || files.length === 0}>
-              {submitting ? "Submitting…" : "Submit request"}
-            </button>
-          </form>
-        )}
-
-        {latest ? (
-          <div className="bg-[var(--surface-2)] rounded-lg p-4 space-y-1">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="text-sm font-semibold min-w-0">{latest.description}</div>
-              <span className={`badge ${latest.status === "approved" ? "badge-confirmed" : latest.status === "rejected" ? "badge-rejected" : "badge-pending"}`}>
-                {latest.status === "pending" ? "Pending Kinesis" : latest.status}
-              </span>
-            </div>
-            <div className="text-xs text-[var(--text-faint)]">
-              Submitted {new Date(latest.created_at).toLocaleString()}
-              {latest.attached_files.length > 0 && ` · ${latest.attached_files.length} file(s)`}
-            </div>
-            {latest.resolution_note && <p className="text-xs text-[var(--text-muted)]">{latest.resolution_note}</p>}
-          </div>
-        ) : (
-          <p className="text-sm text-[var(--text-faint)]">No requests yet.</p>
-        )}
       </div>
     </div>
   );

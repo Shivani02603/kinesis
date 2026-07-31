@@ -10,7 +10,7 @@ Three roles, matching the tiers already designed and agreed:
 """
 
 import bcrypt
-from fastapi import Depends, Header, HTTPException
+from fastapi import Header, HTTPException
 
 from . import db
 
@@ -41,13 +41,6 @@ def current_user(authorization: str | None = Header(None)) -> dict:
     user = db.get_session_user(token)
     if user is None:
         raise HTTPException(status_code=401, detail="Session is invalid or has expired — please log in again")
-    return user
-
-
-def require_super_admin(user: dict = Depends(current_user)) -> dict:
-    """Use as a dependency: raises 403 unless the caller is a super_admin."""
-    if user["role"] != "super_admin":
-        raise HTTPException(status_code=403, detail="Only a Super Admin can do this")
     return user
 
 
