@@ -8,7 +8,6 @@ import {
   type PlanConflict,
   type PlanConsumptionCell,
   type PlanMachine,
-  type PlanOutcome,
   type PlanProduct,
   type PlanResource,
   type PlanRun,
@@ -871,7 +870,45 @@ function ConflictDetail({ conflict }: { conflict: PlanConflict }) {
   );
 }
 
-function ResultsView({ outcome }: { outcome: PlanOutcome }) {
+function Sparkline({ values }: { values: number[] }) {
+  if (values.length < 2) {
+    return <div className="h-10 flex items-center text-[11px] text-[var(--text-faint)]">Not enough history yet</div>;
+  }
+  const w = 200, h = 44, pad = 5;
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = max - min || 1;
+  const points = values.map((v, i) => [
+    pad + (i / (values.length - 1)) * (w - pad * 2),
+    h - pad - ((v - min) / range) * (h - pad * 2),
+  ]);
+  const line = points.map((p) => p.join(",")).join(" ");
+  const area = `${pad},${h - pad} ${line} ${w - pad},${h - pad}`;
+  const [lastX, lastY] = points[points.length - 1];
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-11" preserveAspectRatio="none">
+      <polygon points={area} fill="var(--accent)" opacity="0.12" />
+      <polyline points={line} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={lastX} cy={lastY} r="3" fill="var(--accent)" />
+    </svg>
+  );
+}
+
+function StackedHoursBar({ busyPct, downtimePct }: { busyPct: number; downtimePct: number }) {
+  const idlePct = Math.max(0, 100 - busyPct - downtimePct);
+  return (
+    <div className="h-2 rounded-full overflow-hidden flex bg-[var(--surface-2)]">
+      {busyPct > 0 && <div className="h-full bg-[var(--success)]" style={{ width: `${busyPct}%` }} />}
+      {downtimePct > 0 && <div className="h-full bg-[var(--danger)] ml-[1px]" style={{ width: `${downtimePct}%` }} />}
+      {idlePct > 0 && <div className="h-full ml-[1px]" style={{ width: `${idlePct}%` }} />}
+    </div>
+  );
+}
+
+function ResultsView({
+  run, history,
+}: { run: PlanRun; history: PlanRun[] }) {
+  const outcome = run.result!.output;
+
   if (outcome.verdict === "empty") {
     return (
       <div className="mt-3 flex items-center gap-2 text-sm text-[var(--text-faint)]">
@@ -904,38 +941,73 @@ function ResultsView({ outcome }: { outcome: PlanOutcome }) {
     );
   }
 
-  // solved
+  // solved — everything below is derived straight from this run's own stored
+  // snapshot (products/compatibility as they were AT SOLVE TIME) plus the
+  // solved outcome, never re-fetched live state, so a past run in history
+  // still renders correctly even after today's products/machines have changed.
+  const productSnapshot = new Map(run.result!.inputs.products.map((p) => [p.id, p]));
+  const compatSnapshot = new Map(run.result!.inputs.compatibility.map((c) => [`${c.product_id}:${c.machine_id}`, c.hours_per_unit]));
+  const defectDetail = run.result!.inputs.defect_detail;
+
+  const totalUnits = outcome.products.reduce((sum, p) => sum + p.quantity, 0);
+  const totalRevenue = outcome.products.reduce((sum, p) => sum + (productSnapshot.get(p.product_id)?.price_per_unit ?? 0) * p.quantity, 0);
+  const totalCost = outcome.products.reduce((sum, p) => sum + (productSnapshot.get(p.product_id)?.cost_per_unit ?? 0) * p.quantity, 0);
+  const totalProfit = totalRevenue - totalCost;
+  const avgUtilization = outcome.machines.length
+    ? outcome.machines.reduce((sum, m) => sum + m.utilization_pct, 0) / outcome.machines.length
+    : 0;
+  const fulfillmentValues = outcome.products.map((p) => p.demand_fulfillment_pct).filter((v): v is number => v != null);
+  const avgFulfillment = fulfillmentValues.length ? fulfillmentValues.reduce((a, b) => a + b, 0) / fulfillmentValues.length : null;
   const anyBinding = outcome.machines.some((m) => m.binding) || outcome.resources.some((r) => r.binding);
-  const maxProfit = Math.max(1, ...outcome.products.map((p) => p.profit_contribution));
-  const sortedProducts = [...outcome.products].sort((a, b) => b.profit_contribution - a.profit_contribution);
+  const bottleneckCount = outcome.machines.filter((m) => m.binding).length + outcome.resources.filter((r) => r.binding).length;
+
   const scheduleRows = outcome.products.flatMap((p) =>
     Object.entries(p.by_machine)
       .filter(([, qty]) => qty > 0.001)
-      .map(([machineId, qty]) => ({ productName: p.name, machineId, quantity: qty }))
+      .map(([machineId, qty]) => ({
+        productName: p.name, machineId, quantity: qty,
+        runTime: qty * (compatSnapshot.get(`${p.product_id}:${machineId}`) ?? 0),
+      }))
   );
+  const totalRunTime = scheduleRows.reduce((sum, r) => sum + r.runTime, 0);
   const machineName = (id: string) => outcome.machines.find((m) => m.machine_id === id)?.name ?? id;
+
+  const sparklineValues = history
+    .filter((r) => r.objective_value != null)
+    .slice(0, 8)
+    .reverse()
+    .map((r) => r.objective_value as number);
+
+  const bottleneckRows = [
+    ...outcome.machines.map((m) => ({
+      name: m.name, kind: "Machine capacity", binding: m.binding, shadowPrice: m.shadow_price, unit: "hr",
+    })),
+    ...outcome.resources.map((r) => ({
+      name: r.name, kind: "Resource", binding: r.binding, shadowPrice: r.shadow_price, unit: r.unit,
+    })),
+  ];
 
   return (
     <div className="mt-4 space-y-5">
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        <AdminStat
-          label={outcome.objective_label}
-          value={outcome.objective_value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-          tone="ok"
-        />
-        <AdminStat label="Products in plan" value={String(outcome.products.length)} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <AdminStat label="Total units produced" value={totalUnits.toLocaleString(undefined, { maximumFractionDigits: 0 })} />
+        <AdminStat label="Total revenue" value={`₹${totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
+        <AdminStat label="Total cost" value={`₹${totalCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
+        <AdminStat label="Profit" value={`₹${totalProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} tone="ok" />
+        <AdminStat label="Avg. utilization" value={`${avgUtilization.toFixed(1)}%`} />
+        <AdminStat label="Demand fulfillment" value={avgFulfillment != null ? `${avgFulfillment.toFixed(1)}%` : "—"} />
         <AdminStat
           label="Bottlenecks"
-          value={String(outcome.machines.filter((m) => m.binding).length + outcome.resources.filter((r) => r.binding).length)}
-          sub={`of ${outcome.machines.length + outcome.resources.length} tracked`}
+          value={String(bottleneckCount)}
+          sub={`of ${bottleneckRows.length} tracked`}
           tone={anyBinding ? "watch" : "ok"}
         />
       </div>
 
       {outcome.degenerate_note && <InfoCallout tone="info" icon="info">{outcome.degenerate_note}</InfoCallout>}
 
-      {scheduleRows.length > 0 && (
-        <div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+        <div className="xl:col-span-2">
           <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-faint)] mb-2.5">Production schedule</h4>
           <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
             <table className="text-sm w-full">
@@ -944,6 +1016,7 @@ function ResultsView({ outcome }: { outcome: PlanOutcome }) {
                   <th className="text-left py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Product</th>
                   <th className="text-left py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Machine</th>
                   <th className="text-right py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Quantity</th>
+                  <th className="text-right py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Run time (hrs)</th>
                 </tr>
               </thead>
               <tbody>
@@ -952,130 +1025,176 @@ function ResultsView({ outcome }: { outcome: PlanOutcome }) {
                     <td className="py-2 px-3 font-semibold">{row.productName}</td>
                     <td className="py-2 px-3 text-[var(--text-muted)]">{machineName(row.machineId)}</td>
                     <td className="py-2 px-3 text-right font-mono">{row.quantity.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
+                    <td className="py-2 px-3 text-right font-mono text-[var(--text-muted)]">{row.runTime.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
                   </tr>
                 ))}
+                {scheduleRows.length > 0 && (
+                  <tr className="border-t border-[var(--border-strong)] font-bold">
+                    <td className="py-2 px-3" colSpan={2}>Total</td>
+                    <td className="py-2 px-3 text-right font-mono">{totalUnits.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
+                    <td className="py-2 px-3 text-right font-mono">{totalRunTime.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </div>
-      )}
 
-      <div>
-        <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-faint)] mb-2.5">Recommended production</h4>
-        <div className="space-y-2.5">
-          {sortedProducts.map((p) => {
-            const pct = Math.max(3, (p.profit_contribution / maxProfit) * 100);
-            return (
+        <div className="bg-[var(--surface-2)] rounded-xl border border-[var(--border)] p-4">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[var(--text-faint)] mb-1">
+            <span className="material-symbols-outlined text-[16px] text-[var(--accent)]">auto_awesome</span>
+            Objective
+          </div>
+          <div className="text-sm font-semibold mb-3">{outcome.objective_label}</div>
+          <div className="text-2xl font-bold font-mono text-[var(--accent-hover)] mb-2">
+            {outcome.objective_value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </div>
+          <Sparkline values={sparklineValues} />
+          <p className="text-[11px] text-[var(--text-faint)] mt-1">Last {sparklineValues.length} plan(s) generated</p>
+        </div>
+      </div>
+
+      {outcome.products.some((p) => p.demand_fulfillment_pct != null) && (
+        <div>
+          <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-faint)] mb-2.5">
+            Demand fulfillment — % of demand met after considering defects
+          </h4>
+          <div className="space-y-2.5">
+            {outcome.products.filter((p) => p.demand_fulfillment_pct != null).map((p) => (
               <div key={p.product_id}>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-semibold text-[var(--text)]">{p.name}</span>
                   <span className="font-mono text-[var(--text-muted)]">
-                    {p.quantity.toLocaleString(undefined, { maximumFractionDigits: 1 })} units · ₹
-                    {p.profit_contribution.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                    {p.demand_fulfillment_pct != null && ` · ${p.demand_fulfillment_pct.toFixed(0)}% of demand`}
+                    {p.demand_fulfillment_pct!.toFixed(1)}% ({p.quantity.toLocaleString(undefined, { maximumFractionDigits: 0 })} / {p.demand_max?.toLocaleString()})
                   </span>
                 </div>
                 <div className="h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${pct}%` }} />
+                  <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${Math.max(2, p.demand_fulfillment_pct!)}%` }} />
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {outcome.machines.length > 0 && (
         <div>
-          <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-faint)] mb-2.5">
-            Machine utilization — why can&apos;t I make more?
-          </h4>
-          <div className="space-y-3">
-            {outcome.machines.map((m) => {
-              const pct = m.available_hours > 0 ? Math.min(100, (m.used_hours / m.available_hours) * 100) : 0;
-              return (
-                <div key={m.machine_id}>
-                  <div className="flex items-center justify-between mb-1 text-xs">
-                    <span className="font-semibold flex items-center gap-1.5 text-[var(--text)]">
-                      {m.name}
-                      {m.binding && <span className="badge badge-rejected">BOTTLENECK</span>}
-                      {m.downtime_hours > 0 && (
-                        <span className="badge badge-pending">-{m.downtime_hours.toFixed(1)}h downtime ({m.downtime_tier})</span>
-                      )}
-                    </span>
-                    <span className="text-[var(--text-faint)] font-mono">
-                      {m.used_hours.toLocaleString(undefined, { maximumFractionDigits: 1 })} / {m.available_hours.toLocaleString()}h
-                      {" "}({m.utilization_pct.toFixed(0)}%)
-                    </span>
-                  </div>
-                  <div className="h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${m.binding ? "bg-[var(--danger)]" : "bg-[var(--success)]"}`}
-                      style={{ width: `${Math.max(2, pct)}%` }}
-                    />
-                  </div>
-                  {m.binding && (
-                    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[var(--warning)]">
-                      <span className="material-symbols-outlined text-[14px]">insights</span>
-                      One more hour of {m.name} would change the objective by ~{m.shadow_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}.
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-faint)] mb-2.5">Machine utilization &amp; downtime</h4>
+          <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+            <table className="text-sm w-full">
+              <thead>
+                <tr className="bg-[var(--surface-2)]">
+                  <th className="text-left py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Machine</th>
+                  <th className="text-left py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)] w-1/3">Utilization</th>
+                  <th className="text-right py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Busy (hrs)</th>
+                  <th className="text-right py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Downtime (hrs)</th>
+                  <th className="text-right py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Available (hrs)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {outcome.machines.map((m) => {
+                  const busyPct = m.available_hours > 0 ? (m.used_hours / m.available_hours) * 100 : 0;
+                  const downtimePct = m.available_hours > 0 ? (m.downtime_hours / m.available_hours) * 100 : 0;
+                  return (
+                    <tr key={m.machine_id} className="border-t border-[var(--border)]">
+                      <td className="py-2 px-3 font-semibold flex items-center gap-1.5">
+                        {m.name}
+                        {m.binding && <span className="badge badge-rejected">BOTTLENECK</span>}
+                      </td>
+                      <td className="py-2 px-3">
+                        <StackedHoursBar busyPct={busyPct} downtimePct={downtimePct} />
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono">{m.used_hours.toFixed(1)}</td>
+                      <td className="py-2 px-3 text-right font-mono">
+                        {m.downtime_hours > 0 ? <span className="badge badge-rejected">{m.downtime_hours.toFixed(1)}</span> : "—"}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono text-[var(--text-muted)]">{m.available_hours.toFixed(1)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center gap-4 mt-2 text-[11px] text-[var(--text-faint)]">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[var(--success)] inline-block" /> Busy time</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[var(--danger)] inline-block" /> Downtime (predicted)</span>
           </div>
         </div>
       )}
 
-      {outcome.resources.length > 0 && (
-        <div>
-          <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-faint)] mb-2.5">Resource usage</h4>
-          <div className="space-y-3">
-            {outcome.resources.map((r) => {
-              const pct = r.available > 0 ? Math.min(100, (r.used / r.available) * 100) : 0;
-              return (
-                <div key={r.resource_id}>
-                  <div className="flex items-center justify-between mb-1 text-xs">
-                    <span className="font-semibold flex items-center gap-1.5 text-[var(--text)]">
-                      {r.name}
-                      {r.binding && <span className="badge badge-rejected">BOTTLENECK</span>}
-                    </span>
-                    <span className="text-[var(--text-faint)] font-mono">
-                      {r.used.toLocaleString(undefined, { maximumFractionDigits: 1 })} / {r.available.toLocaleString()} {r.unit}
-                    </span>
-                  </div>
-                  <div className="h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${r.binding ? "bg-[var(--danger)]" : "bg-[var(--success)]"}`}
-                      style={{ width: `${Math.max(2, pct)}%` }}
-                    />
-                  </div>
-                  {r.binding && (
-                    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[var(--warning)]">
-                      <span className="material-symbols-outlined text-[14px]">insights</span>
-                      One more {r.unit} of {r.name} would change the objective by ~{r.shadow_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}.
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+        {outcome.quality_risk.length > 0 && (
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-faint)] mb-2.5">Quality risk / extra units produced</h4>
+            <p className="text-[11px] text-[var(--text-faint)] mb-2">Extra units ensure real demand is still met after defects.</p>
+            <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+              <table className="text-sm w-full">
+                <thead>
+                  <tr className="bg-[var(--surface-2)]">
+                    <th className="text-left py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Product</th>
+                    <th className="text-right py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Pred. defect rate</th>
+                    <th className="text-right py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Extra units</th>
+                    <th className="text-right py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Units to produce</th>
+                    <th className="text-right py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Demand</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {outcome.quality_risk.map((q) => (
+                    <tr key={q.product_id} className="border-t border-[var(--border)]">
+                      <td className="py-2 px-3 font-semibold">{q.name}</td>
+                      <td className="py-2 px-3 text-right font-mono">{defectDetail ? `${(defectDetail.estimated_defect_rate * 100).toFixed(1)}%` : "—"}</td>
+                      <td className="py-2 px-3 text-right font-mono">{q.extra_units.toFixed(1)}</td>
+                      <td className="py-2 px-3 text-right font-mono">{q.inflated_floor.toFixed(1)}</td>
+                      <td className="py-2 px-3 text-right font-mono text-[var(--text-muted)]">{q.raw_floor}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[11px] text-[var(--text-faint)] mt-2 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[13px]">info</span>
+              Units to produce = Demand / (1 − defect rate). One project-wide estimate, not per-product — no per-product defect data exists yet.
+            </p>
           </div>
-        </div>
-      )}
+        )}
 
-      {outcome.quality_risk.length > 0 && (
-        <InfoCallout tone="warning" icon="rule">
-          <p className="font-semibold text-[var(--warning)]">
-            Extra units added to cover predicted defects (rough estimate — see the fallback risk tier below):
-          </p>
-          <ul className="ml-4 list-disc">
-            {outcome.quality_risk.map((q) => (
-              <li key={q.product_id}>
-                {q.name}: +{q.extra_units.toFixed(1)} units ({q.raw_floor} → {q.inflated_floor.toFixed(1)})
-              </li>
-            ))}
-          </ul>
-        </InfoCallout>
-      )}
+        {bottleneckRows.length > 0 && (
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wide text-[var(--text-faint)] mb-2.5">Bottlenecks / binding constraints (shadow prices)</h4>
+            <p className="text-[11px] text-[var(--text-faint)] mb-2">Resources limiting the plan. Increasing their availability would improve the objective.</p>
+            <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+              <table className="text-sm w-full">
+                <thead>
+                  <tr className="bg-[var(--surface-2)]">
+                    <th className="text-left py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Name</th>
+                    <th className="text-left py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Status</th>
+                    <th className="text-right py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Shadow price</th>
+                    <th className="text-left py-2 px-3 text-[11px] uppercase font-bold text-[var(--text-faint)]">Impact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bottleneckRows.map((b, i) => (
+                    <tr key={i} className="border-t border-[var(--border)]">
+                      <td className="py-2 px-3 font-semibold">{b.name}</td>
+                      <td className="py-2 px-3">
+                        <span className={`badge ${b.binding ? "badge-rejected" : "badge-confirmed"}`}>
+                          {b.binding ? "Binding" : "Non-binding"}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono">{b.shadowPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} / {b.unit}</td>
+                      <td className="py-2 px-3 text-[var(--text-muted)]">
+                        {b.binding && Math.abs(b.shadowPrice) > 0.001
+                          ? `+${b.shadowPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} to objective per extra ${b.unit}`
+                          : "No additional benefit"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1237,7 +1356,7 @@ export function ProductionMixPanel({ projectId }: { projectId: string }) {
             </button>
           }
         />
-        {latestRun?.result && <ResultsView outcome={latestRun.result.output} />}
+        {latestRun?.result && <ResultsView run={latestRun} history={runs} />}
       </div>
 
       {runs.length > 0 && <RunHistorySection runs={runs} activeRunId={latestRun?.id} onSelect={handleSelectRun} />}
